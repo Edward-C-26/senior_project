@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -99,7 +99,12 @@ int main(void)
   MX_SPI1_Init();
   MX_SPI2_Init();
   MX_TIM4_Init();
+
   /* USER CODE BEGIN 2 */
+
+  SPI_Init();  // initializes the SPIx peripheral
+	initPECTable();
+	loadConfig(&BMSconfig); 
 
   /* USER CODE END 2 */
 
@@ -110,6 +115,13 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // Reset Config Registers
+    writeConfigAll(BMSconfig);
+
+    HAL_Delay(100);
+
+
+
   }
   /* USER CODE END 3 */
 }
@@ -122,6 +134,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Configure the main internal regulator output voltage
   */
@@ -153,6 +166,12 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
@@ -168,7 +187,7 @@ static void MX_CAN1_Init(void)
   /* USER CODE END CAN1_Init 0 */
 
   /* USER CODE BEGIN CAN1_Init 1 */
-
+  CAN_FilterTypeDef sFilterConfig;
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
   hcan1.Init.Prescaler = 16;
