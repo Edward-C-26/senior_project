@@ -1,0 +1,54 @@
+#ifndef BMS_CONFIG_H
+#define BMS_CONFIG_H
+
+#include "main.h"
+#include "stdbool.h"
+#include "stdlib.h"
+#include "string.h"
+
+typedef struct {
+	// General BMS configuration
+	uint8_t numOfICs;
+	uint8_t address[16];
+	uint8_t addressesofICs[16];
+	uint8_t numOfCellInputs;
+	uint8_t numOfCellsPerIC;
+	uint8_t numOfTempPerIC;
+	uint8_t ADCConversionRate;
+	uint16_t OV_threshold;
+	uint16_t UV_threshold;
+	uint16_t LUV_threshold;
+	uint16_t HUV_threshold;
+	uint16_t slowCharge_threshold;
+	uint16_t stopCharge_threshold;
+	uint16_t max_difference;
+	uint16_t balancing_difference;
+	uint8_t invalidPECcount;
+	uint16_t dischargeTime;
+	uint16_t start_scaling;
+	uint16_t stop_scaling;
+	uint16_t scale_to;
+	uint16_t normalCurrent;
+	uint16_t lowerCurrent;
+	uint16_t chargerVoltage;
+
+	// LTC configuration
+	bool GPIO5PulldownOff;
+	bool GPIO4PulldownOff;
+	bool GPIO3PulldownOff;
+	bool GPIO2PulldownOff;
+	bool GPIO1PulldownOff;
+	bool ReferenceOn;
+	bool ADCModeOption;
+	uint16_t UndervoltageComparisonVoltage;
+	uint16_t OvervoltageComparisonVoltage;
+	bool DischargeCell[12];
+	uint8_t DischargeTimeoutValue;
+	uint8_t ADCMode;
+	bool DischargePermitted;
+
+} BMSConfigStructTypedef;
+
+void loadConfig(BMSConfigStructTypedef* config);
+
+#endif	// BMS_CONFIG_H
