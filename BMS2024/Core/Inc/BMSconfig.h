@@ -1,4 +1,4 @@
-#include "stm32f1xx.h"
+#include "main.h"
 #include "stdbool.h"
 #include "stdlib.h"
 #include "string.h"
@@ -56,6 +56,6 @@ typedef struct {
 	uint8_t ADCMode;
 	bool DischargePermitted;
 
-} BMSconfigStructTypedef;
+} BMSConfigStructTypedef;
 
-void loadConfig(BMSconfigStructTypedef* config);
+void loadConfig(BMSConfigStructTypedef* config);

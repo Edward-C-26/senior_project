@@ -1,6 +1,6 @@
 #include "BMSconfig.h"
 
-void loadConfig(BMSconfigStructTypedef* cfg) {
+void loadConfig(BMSConfigStructTypedef* cfg) {
     // change this
     cfg->numOfICs = 12;
     for (int i = 0; i < 12; i++) {

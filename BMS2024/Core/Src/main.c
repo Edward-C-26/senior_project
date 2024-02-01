@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
+#include "BMSconfig.h"
+#include "SPI.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -83,6 +85,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  BMSConfigStructTypedef BMSConfig;
 
   /* USER CODE END Init */
 
@@ -103,8 +106,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   SPI_Init();  // initializes the SPIx peripheral
-	initPECTable();
-	loadConfig(&BMSconfig); 
+	// initPECTable();
+	loadConfig(&BMSConfig); 
 
   /* USER CODE END 2 */
 
@@ -116,7 +119,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     // Reset Config Registers
-    writeConfigAll(BMSconfig);
+    // writeConfigAll(BMSConfig);
 
     HAL_Delay(100);
 
@@ -166,8 +169,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
+  // PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  // PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -187,7 +190,7 @@ static void MX_CAN1_Init(void)
   /* USER CODE END CAN1_Init 0 */
 
   /* USER CODE BEGIN CAN1_Init 1 */
-  CAN_FilterTypeDef sFilterConfig;
+  // CAN_FilterTypeDef sFilterConfig;
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
   hcan1.Init.Prescaler = 16;
