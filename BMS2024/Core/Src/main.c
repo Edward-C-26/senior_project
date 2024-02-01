@@ -24,6 +24,7 @@
 #include <stdbool.h>
 
 #include "BMSconfig.h"
+#include "LTC6811.h"
 #include "SPI.h"
 /* USER CODE END Includes */
 
@@ -105,8 +106,9 @@ int main(void) {
 	/* USER CODE BEGIN 2 */
 
 	SPI_Init();	 // initializes the SPIx peripheral
-	// initPECTable();
+	initPECTable();
 	loadConfig(&BMSConfig);
+	HAL_CAN_Start(&hcan1);
 
 	/* USER CODE END 2 */
 
@@ -117,9 +119,9 @@ int main(void) {
 
 		/* USER CODE BEGIN 3 */
 		// Reset Config Registers
-		// writeConfigAll(BMSConfig);
+		writeConfigAll(BMSConfig);
 
-		HAL_Delay(100);
+		HAL_Delay(100);	 // TODO: Why is this here?
 	}
 	/* USER CODE END 3 */
 }
