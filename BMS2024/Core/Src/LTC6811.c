@@ -88,48 +88,45 @@ LTC6811 Command Functions
 */
 
 #define BOARD_START 0
-#define BOARD_END 12
+#define BOARD_SIZE 12
+#define BOARD_END BOARD_SIZE
 
 #include "LTC6811.h"
 
-#include <math.h>
+uint16_t pec15Table[256];	   // Packet Error Code
+uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor
 
-bool succesfullWriteRead;
-
-uint16_t pec15Table[256];
-uint16_t CRC15_POLY = 0x4599;
-
+// Initialises Packet Error Code LUT
 void initPECTable(void) {
 	uint16_t remainder;
 
 	for (int i = 0; i < 256; i++) {
 		remainder = i << 7;
-		for (int bit = 8; bit > 0; bit--) {
-			if (remainder & 0x4000) {
-				remainder = ((remainder << 1));
-				remainder = (remainder ^ CRC15_POLY);
-			} else {
-				remainder = ((remainder << 1));
-			}
+		for (int bit = 0; bit < 8; bit++) {
+			remainder <<= 1;
+
+			if (remainder & 0x4000)
+				remainder ^= CRC15_POLY;
 		}
 		pec15Table[i] = remainder & 0xFFFF;
 	}
-};
+}
+
 // GOOD
-void writeConfigAddress(BMSConfigStructTypedef cfg, uint8_t address) {
+void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	uint8_t config[6];
 	uint8_t cmd[12];
 	uint16_t PEC_return;
 	uint8_t dummy[8];
 
-	config[0] = (uint8_t)(cfg.GPIO5PulldownOff << 7) | (cfg.GPIO4PulldownOff << 6) | (cfg.GPIO3PulldownOff << 5) | (cfg.GPIO2PulldownOff << 4) | (cfg.GPIO1PulldownOff << 3) | (cfg.ReferenceOn << 2) | (cfg.ADCModeOption);
-	config[1] = (uint8_t)(cfg.UndervoltageComparisonVoltage & 0xFF);
-	config[2] = (uint8_t)((cfg.OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg.UndervoltageComparisonVoltage >> 8) & 0x0F);
-	config[3] = (uint8_t)((cfg.OvervoltageComparisonVoltage >> 4) & 0xFF);
-	config[4] = (uint8_t)(cfg.DischargeCell8 << 7) | (cfg.DischargeCell7 << 6) | (cfg.DischargeCell6 << 5) | (cfg.DischargeCell5 << 4) | (cfg.DischargeCell4 << 3) | (cfg.DischargeCell3 << 2) | (cfg.DischargeCell2 << 1) | (cfg.DischargeCell1);
-	config[5] = (uint8_t)((cfg.DischargeTimeoutValue << 4) & 0xF0) | (cfg.DischargeCell12 << 3) | (cfg.DischargeCell11 << 2) | (cfg.DischargeCell10 << 1) | (cfg.DischargeCell9);
+	config[0] = (uint8_t)((cfg->GPIO5PulldownOff << 7) | (cfg->GPIO4PulldownOff << 6) | (cfg->GPIO3PulldownOff << 5) | (cfg->GPIO2PulldownOff << 4) | (cfg->GPIO1PulldownOff << 3) | (cfg->ReferenceOn << 2) | (cfg->ADCModeOption));
+	config[1] = (uint8_t)(cfg->UndervoltageComparisonVoltage & 0xFF);
+	config[2] = (uint8_t)(((cfg->OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg->UndervoltageComparisonVoltage >> 8) & 0x0F));
+	config[3] = (uint8_t)((cfg->OvervoltageComparisonVoltage >> 4) & 0xFF);
+	config[4] = (uint8_t)((cfg->DischargeCell[8] << 7) | (cfg->DischargeCell[7] << 6) | (cfg->DischargeCell[6] << 5) | (cfg->DischargeCell[5] << 4) | (cfg->DischargeCell[4] << 3) | (cfg->DischargeCell[3] << 2) | (cfg->DischargeCell[2] << 1) | (cfg->DischargeCell[1]));
+	config[5] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[12] << 3) | (cfg->DischargeCell[11] << 2) | (cfg->DischargeCell[10] << 1) | (cfg->DischargeCell[9]));
 
-	cmd[0] = (uint8_t)(0x80 | ((address << 3) & 0x78) | ((WriteConfigurationRegisterGroup >> 8) & 0x07));
+	cmd[0] = (uint8_t)((0x80 | ((address << 3) & 0x78) | ((WriteConfigurationRegisterGroup >> 8) & 0x07)));
 	cmd[1] = (uint8_t)(WriteConfigurationRegisterGroup & 0xFF);
 
 	PEC_return = calculatePEC(2, cmd);
@@ -137,12 +134,7 @@ void writeConfigAddress(BMSConfigStructTypedef cfg, uint8_t address) {
 	cmd[2] = (PEC_return >> 8) & 0xFF;
 	cmd[3] = PEC_return & 0xFF;
 
-	cmd[4] = config[0];
-	cmd[5] = config[1];
-	cmd[6] = config[2];
-	cmd[7] = config[3];
-	cmd[8] = config[4];
-	cmd[9] = config[5];
+	memcpy(&cmd[4], config, 6 * sizeof(config[0]));
 
 	PEC_return = calculatePEC(6, cmd + 4);
 
@@ -152,93 +144,40 @@ void writeConfigAddress(BMSConfigStructTypedef cfg, uint8_t address) {
 	SPIWrite(cmd, sizeof(cmd));
 
 	readConfig(address, dummy);
-};
+}
+
 // GOOD
-void writeConfigAll(BMSConfigStructTypedef cfg) {
+void writeConfigAll(BMSConfigStructTypedef *cfg) {
 	wakeup_idle();
 
-	for (uint8_t i = 0; i < cfg.numOfICs; i++) {
-		writeConfigAddress(cfg, cfg.address[i]);
+	for (uint8_t i = 0; i < cfg->numOfICs; i++) {
+		writeConfigAddress(cfg, cfg->address[i]);
 	}
-};
+}
 
 bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool PEC_check = false;
 	bool dataValid = true;
 	uint16_t voltage[12];
 
-	// voltage = (uint16_t *)malloc(12 * sizeof(uint16_t));
-
-	// sendAddressCommand(0x711, address); // clear cell voltage groups
-	// sendAddressCommand(StartCellVoltageADCConversionAll, address); // start conversion for every cell
-	// sendAddressCommand(0x261, address); // 1 and 7
-	// sendAddressCommand(0x264, address); // 4 and 10
-
-	// HAL_Delay(50); // conversion time is 12.8ms at 422Hz, so wait 15ms
-
 	PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 	dataValid = dataValid & PEC_check;
+
 	PEC_check = readRegister(ReadCellVoltageRegisterGroup4to6, address, voltage);
 	dataValid = dataValid & PEC_check;
+
 	PEC_check = readRegister(ReadCellVoltageRegisterGroup7to9, address, voltage);
 	dataValid = dataValid & PEC_check;
+
 	PEC_check = readRegister(ReadCellVoltageRegisterGroup10to12, address, voltage);
 	dataValid = dataValid & PEC_check;
 
-	for (uint8_t i = 0; i < 12; i++) {
-		cellVoltage[i] = voltage[i];
-	}
+	memcpy(cellVoltage, voltage, sizeof(voltage));
 
-	// free(voltage);
-
-	return (dataValid);
-};
+	return dataValid;
+}
 
 bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
-	/*
-	uint16_t boardVoltage[cfg.numOfCellInputs];
-	bool PEC_check[cfg.numOfICs];
-	bool dataValid = true;
-
-	for (uint8_t board = 0; board < cfg.numOfICs; board++) {
-
-			//read voltage of every cell input (1-12) for a specific address, store in boardVoltage
-			PEC_check[board] = readCellVoltage(cfg.address[board], boardVoltage);
-
-			//store cell number and valid data bit in bmsData
-			for (uint8_t cell = 0; cell < cfg.numOfCellsPerIC; cell++) {
-					bmsData[(board * cfg.numOfCellsPerIC) + cell][0] = (uint8_t) ((board * cfg.numOfCellsPerIC) + cell + 1); //cell number
-					bmsData[(board * cfg.numOfCellsPerIC) + cell][1] = (uint8_t) (0x02 & (PEC_check[board] << 1)); //valid data bit in status byte
-			}
-
-			//store cell voltage in bmsData
-			bmsData[(board * cfg.numOfCellsPerIC) + 0][2] = (uint8_t) ((boardVoltage[0] >> 8) & 0xFF); //cell 1, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 0][3] = (uint8_t) (boardVoltage[0] & 0xFF); //cell 1, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 1][2] = (uint8_t) ((boardVoltage[1] >> 8) & 0xFF); //cell 2, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 1][3] = (uint8_t) (boardVoltage[1] & 0xFF); //cell 2, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 2][2] = (uint8_t) ((boardVoltage[2] >> 8) & 0xFF); //cell 3, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 2][3] = (uint8_t) (boardVoltage[2] & 0xFF); //cell 3, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 3][2] = (uint8_t) ((boardVoltage[3] >> 8) & 0xFF); //cell 4, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 3][3] = (uint8_t) (boardVoltage[3] & 0xFF); //cell 4, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 4][2] = (uint8_t) ((boardVoltage[6] >> 8) & 0xFF); //cell 7, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 4][3] = (uint8_t) (boardVoltage[6] & 0xFF); //cell 7, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 5][2] = (uint8_t) ((boardVoltage[7] >> 8) & 0xFF); //cell 8, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 5][3] = (uint8_t) (boardVoltage[7] & 0xFF); //cell 8, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 6][2] = (uint8_t) ((boardVoltage[8] >> 8) & 0xFF); //cell 9, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 6][3] = (uint8_t) (boardVoltage[8] & 0xFF); //cell 9, voltage L
-			bmsData[(board * cfg.numOfCellsPerIC) + 7][2] = (uint8_t) ((boardVoltage[9] >> 8) & 0xFF); //cell 10, voltage H
-			bmsData[(board * cfg.numOfCellsPerIC) + 7][3] = (uint8_t) (boardVoltage[9] & 0xFF); //cell 10, voltage L
-
-	}
-
-	for (uint8_t board = 0; board < cfg.numOfICs; board++) {
-			if (PEC_check[board] == 0)
-					dataValid = false;
-	}
-
-	return dataValid; //return true if no PEC errors for any board
-	*/
-
 	uint16_t boardVoltage[12];
 	bool PEC_check[12];
 	bool dataValid = true;
@@ -257,44 +196,17 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 		dataValid &= PEC_check[board];
 
 		// store cell number and valid data bit in bmsData
-		for (uint8_t cell = 0; cell < 12; cell++) {
-			bmsData[(board * 12) + cell][0] = (uint8_t)((board * 12) + cell + 1);  // cell number
-			bmsData[(board * 12) + cell][1] = 0;								   // clear status byte
+		for (uint8_t cell = BOARD_END; cell < BOARD_END; cell++) {
+			bmsData[(board * BOARD_SIZE) + cell][0] = (uint8_t)((board * BOARD_SIZE) + cell + 1);  // cell number
+			bmsData[(board * BOARD_SIZE) + cell][1] = 0;										   // clear status byte
+
 			if (PEC_check[board])
-				bmsData[(board * 12) + cell][1] |= 0b00000010;	// set valid data bit
+				bmsData[(board * BOARD_SIZE) + cell][1] |= 0b00000010;	// set valid data bit
+
+			bmsData[(board * BOARD_SIZE) + cell][2] = (uint8_t)((boardVoltage[cell] >> 8) & 0xFF);
+			bmsData[(board * BOARD_SIZE) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
 		}
-
-		// store cell voltage in bmsData
-		bmsData[(board * 12) + 0][2] = (uint8_t)((boardVoltage[0] >> 8) & 0xFF);	// cell 1, voltage H
-		bmsData[(board * 12) + 0][3] = (uint8_t)(boardVoltage[0] & 0xFF);			// cell 1, voltage L
-		bmsData[(board * 12) + 1][2] = (uint8_t)((boardVoltage[1] >> 8) & 0xFF);	// cell 2, voltage H
-		bmsData[(board * 12) + 1][3] = (uint8_t)(boardVoltage[1] & 0xFF);			// cell 2, voltage L
-		bmsData[(board * 12) + 2][2] = (uint8_t)((boardVoltage[2] >> 8) & 0xFF);	// cell 3, voltage H
-		bmsData[(board * 12) + 2][3] = (uint8_t)(boardVoltage[2] & 0xFF);			// cell 3, voltage L
-		bmsData[(board * 12) + 3][2] = (uint8_t)((boardVoltage[3] >> 8) & 0xFF);	// cell 4, voltage H
-		bmsData[(board * 12) + 3][3] = (uint8_t)(boardVoltage[3] & 0xFF);			// cell 4, voltage L
-		bmsData[(board * 12) + 4][2] = (uint8_t)((boardVoltage[4] >> 8) & 0xFF);	// cell 5, voltage H
-		bmsData[(board * 12) + 4][3] = (uint8_t)(boardVoltage[4] & 0xFF);			// cell 5, voltage L
-		bmsData[(board * 12) + 5][2] = (uint8_t)((boardVoltage[5] >> 8) & 0xFF);	// cell 6, voltage H
-		bmsData[(board * 12) + 5][3] = (uint8_t)(boardVoltage[5] & 0xFF);			// cell 6, voltage L
-		bmsData[(board * 12) + 6][2] = (uint8_t)((boardVoltage[6] >> 8) & 0xFF);	// cell 7, voltage H
-		bmsData[(board * 12) + 6][3] = (uint8_t)(boardVoltage[6] & 0xFF);			// cell 7, voltage L
-		bmsData[(board * 12) + 7][2] = (uint8_t)((boardVoltage[7] >> 8) & 0xFF);	// cell 8, voltage H
-		bmsData[(board * 12) + 7][3] = (uint8_t)(boardVoltage[7] & 0xFF);			// cell 8, voltage L
-		bmsData[(board * 12) + 8][2] = (uint8_t)((boardVoltage[8] >> 8) & 0xFF);	// cell 9, voltage H
-		bmsData[(board * 12) + 8][3] = (uint8_t)(boardVoltage[8] & 0xFF);			// cell 9, voltage L
-		bmsData[(board * 12) + 9][2] = (uint8_t)((boardVoltage[9] >> 8) & 0xFF);	// cell 10, voltage H
-		bmsData[(board * 12) + 9][3] = (uint8_t)(boardVoltage[9] & 0xFF);			// cell 10, voltage L
-		bmsData[(board * 12) + 10][2] = (uint8_t)((boardVoltage[10] >> 8) & 0xFF);	// cell 11, voltage H
-		bmsData[(board * 12) + 10][3] = (uint8_t)(boardVoltage[10] & 0xFF);			// cell 11, voltage L
-		bmsData[(board * 12) + 11][2] = (uint8_t)((boardVoltage[11] >> 8) & 0xFF);	// cell 12, voltage H
-		bmsData[(board * 12) + 11][3] = (uint8_t)(boardVoltage[11] & 0xFF);			// cell 12, voltage L
 	}
-
-	// for (uint8_t board = 0; board < BOARD_END; board++) {
-	// 	if (PEC_check[board] == 0)
-	// 		dataValid = false;
-	// }
 
 	return dataValid;  // return true if no PEC errors for any board
 }
@@ -302,20 +214,8 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool tempFault[4]) {
 	bool PEC_check = false;
 	bool dataValid = true;
-	// uint16_t *temp;
 	uint16_t temp[4];
 	double realTemp[4];
-	// double dummy[4];
-	// double conversion[4];
-
-	// temp = (uint16_t *)malloc(4 * sizeof(uint16_t));
-
-	// sendAddressCommand(StartCellTempVoltageADCConversionAll, address);
-
-	// HAL_Delay(50); // conversion time is 12.8ms at 422Hz, so wait 15ms
-
-	// wakeup_idle();
-	// HAL_Delay(1);
 
 	for (uint8_t i = 0; i < 4; i++) {
 		temp[i] = 0;
@@ -324,51 +224,23 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 
 	PEC_check = readRegister(ReadAuxiliaryGroupA, address, temp);
 	dataValid = dataValid & PEC_check;
+
 	PEC_check = readRegister(ReadAuxiliaryGroupB, address, temp);
 	dataValid = dataValid & PEC_check;
-	// PEC_check = readRegister(ReadAuxiliaryGroupA, address, temp);
-	// dataValid = dataValid & PEC_check;
 
 	for (uint8_t i = 0; i < 4; i++) {
 		realTemp[i] = (double)temp[i] / 10000;	// Divide by 10,000 b/c units in V x10^-4 from ADC reading
 		// Convert millivolts to volts -> use approximation calculation -> convert to celcius -> multiply by 1000 to convert to integer without losing the end of the reading
-		realTemp[i] = 1000 * (-0.5022 * realTemp[i] * realTemp[i] * realTemp[i] * realTemp[i] * realTemp[i] + 6.665 * realTemp[i] * realTemp[i] * realTemp[i] * realTemp[i] - 35.123 * realTemp[i] * realTemp[i] * realTemp[i] + 92.559 * realTemp[i] * realTemp[i] - 144.22 * realTemp[i] + 166.76);
-		//-0.5022 * pow(realTemp[i], 5) + 6.665 * pow(realTemp[i], 4) - 35.123 * pow(realTemp[i], 3) + 92.559 * pow(realTemp[i], 2) - 144.22 * realTemp[i] + 166.76;
+		realTemp[i] = 1000 * (-0.5022 * pow(realTemp[i], 5) + 6.665 * pow(realTemp[i], 4) - 35.123 * pow(realTemp[i], 3) + 92.559 * pow(realTemp[i], 2) - 144.22 * realTemp[i] + 166.76);
 
 		cellTemp[i] = (uint16_t)realTemp[i];
 
 		dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false;
 		tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
-
-		// cellTemp[i] = (uint16_t)temp[i];
-		// dcFault[i] = false;
-
-		// if ((temp[i] < 19720) || (temp[i] > 49740)) {
-		//     dcFault[i] = true;
-		//     cellTemp[i] = 0x0000;
-		// } else
-		//     dcFault[i] = false;
-
-		// if ((temp[i] >= 41580 ) && (temp[i] < 49240)) {
-		//     tempFault[i] = true;
-		//     cellTemp[i] = 0xFFFF;
-		// } else
-		//     tempFault[i] = false;
-
-		// if ((temp[i] >= 49240 ) && (temp[i] <= 49740)) {
-		//     // dummy[i] = (double) temp[i] / 10000; // convert from ADC value to voltage
-		//     // // convert from voltage to temperature
-		//     // conversion[i] = 37735 - 113923 * dummy[i] + 142663 * pow(dummy[i], 2) - 94465 * pow(dummy[i], 3) + 34799 * pow(dummy[i], 4) - 6749 * pow(dummy[i], 5) + 537.11 * pow(dummy[i], 6);
-		//     // conversion[i] = 500 * (conversion[i] + 20); // map value to larger range
-		//     // cellTemp[i] = (uint16_t) conversion[i];
-		//     cellTemp[i] = (uint16_t)temp[i];
-		// }
 	}
 
-	// free(temp);
-
 	return (dataValid);
-};
+}
 
 bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t boardTemp[4];
@@ -399,60 +271,23 @@ bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 			if (PEC_check[board])
 				bmsData[(board * 12) + cell][1] |= 0b00000010;	// set valid data bit
 
-			// if (!PEC_check[board])
-			// 	bmsData[(board * 12) + cell][1] &= 0b11111101; //reset valid data bit
-
 			if (boardTempFault[cell / 3])
 				bmsData[(board * 12) + cell][1] |= 0b00010000;	// set OT bit
 
 			if (boardDCFault[cell / 3])
 				bmsData[(board * 12) + cell][1] |= 0b00001000;	// set temp DC bit
+
+			bmsData[(board * 12) + cell][4] = (uint8_t)((boardTemp[cell] >> 8) & 0xFF);
+			bmsData[(board * 12) + cell][5] = (uint8_t)(boardTemp[cell] & 0xFF);
 		}
-
-		// store cell temperature in bmsData
-		bmsData[(board * 12) + 0][4] = (uint8_t)((boardTemp[0] >> 8) & 0xFF);  // temp1 H
-		bmsData[(board * 12) + 0][5] = (uint8_t)(boardTemp[0] & 0xFF);		   // temp1 L
-		bmsData[(board * 12) + 1][4] = (uint8_t)((boardTemp[0] >> 8) & 0xFF);  // temp1 H
-		bmsData[(board * 12) + 1][5] = (uint8_t)(boardTemp[0] & 0xFF);		   // temp1 L
-		bmsData[(board * 12) + 2][4] = (uint8_t)((boardTemp[0] >> 8) & 0xFF);
-		bmsData[(board * 12) + 2][5] = (uint8_t)(boardTemp[0] & 0xFF);
-
-		bmsData[(board * 12) + 3][4] = (uint8_t)((boardTemp[1] >> 8) & 0xFF);  // temp2 H
-		bmsData[(board * 12) + 3][5] = (uint8_t)(boardTemp[1] & 0xFF);		   // temp2 L
-		bmsData[(board * 12) + 4][4] = (uint8_t)((boardTemp[1] >> 8) & 0xFF);  // temp2 H
-		bmsData[(board * 12) + 4][5] = (uint8_t)(boardTemp[1] & 0xFF);		   // temp2 L
-		bmsData[(board * 12) + 5][4] = (uint8_t)((boardTemp[1] >> 8) & 0xFF);
-		bmsData[(board * 12) + 5][5] = (uint8_t)(boardTemp[1] & 0xFF);
-
-		bmsData[(board * 12) + 6][4] = (uint8_t)((boardTemp[2] >> 8) & 0xFF);  // temp3 H
-		bmsData[(board * 12) + 6][5] = (uint8_t)(boardTemp[2] & 0xFF);		   // temp3 L
-		bmsData[(board * 12) + 7][4] = (uint8_t)((boardTemp[2] >> 8) & 0xFF);  // temp3 H
-		bmsData[(board * 12) + 7][5] = (uint8_t)(boardTemp[2] & 0xFF);		   // temp3 L
-		bmsData[(board * 12) + 8][4] = (uint8_t)((boardTemp[2] >> 8) & 0xFF);
-		bmsData[(board * 12) + 8][5] = (uint8_t)(boardTemp[2] & 0xFF);
-
-		bmsData[(board * 12) + 9][4] = (uint8_t)((boardTemp[3] >> 8) & 0xFF);	// temp4 H
-		bmsData[(board * 12) + 9][5] = (uint8_t)(boardTemp[3] & 0xFF);			// temp4 L
-		bmsData[(board * 12) + 10][4] = (uint8_t)((boardTemp[3] >> 8) & 0xFF);	// temp4 H
-		bmsData[(board * 12) + 10][5] = (uint8_t)(boardTemp[3] & 0xFF);			// temp4 L
-		bmsData[(board * 12) + 11][4] = (uint8_t)((boardTemp[3] >> 8) & 0xFF);
-		bmsData[(board * 12) + 11][5] = (uint8_t)(boardTemp[3] & 0xFF);
 	}
-
-	// for (uint8_t board = 0; board < BOARD_END; board++) {
-	// 	if (PEC_check[board] == 0)
-	// 		dataValid = false;
-	// }
 
 	return dataValid;
 }
 
 bool readConfig(uint8_t address, uint8_t cfg[8]) {
-	// uint16_t *config;
 	uint16_t config[4];
 	bool dataValid = false;
-
-	// config = (uint16_t *)malloc(4 * sizeof(uint16_t));
 
 	wakeup_idle();
 
@@ -466,8 +301,6 @@ bool readConfig(uint8_t address, uint8_t cfg[8]) {
 	cfg[5] = (uint8_t)(config[2] & 0xFF);
 	cfg[6] = (uint8_t)((config[3] >> 8) & 0xFF);
 	cfg[7] = (uint8_t)(config[3] & 0xFF);
-
-	// free(config);
 
 	return dataValid;
 }
@@ -492,13 +325,13 @@ bool readConfig(uint8_t address, uint8_t cfg[8]) {
 bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t ADOWvoltage[cfg.numOfCellInputs];
 	uint16_t cellVoltage;
-	// bool disconnect = false;
 	bool PEC_check[12];
 	bool dataValid = true;
 
 	wakeup_idle();
 
 	// at least 2
+	// por que los dos
 	sendBroadcastCommand(ClearRegisters);
 	sendBroadcastCommand(StartOpenWireConversionPulldown);
 	sendBroadcastCommand(StartOpenWireConversionPulldown);
@@ -513,67 +346,39 @@ bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]
 		PEC_check[board] = readCellVoltage(cfg.address[board], ADOWvoltage);
 		dataValid &= PEC_check[board];
 
+		// I'm not touching this but wtf
 		ADOWvoltage[4] = ADOWvoltage[6];
 		ADOWvoltage[5] = ADOWvoltage[7];
 		ADOWvoltage[6] = ADOWvoltage[8];
 		ADOWvoltage[7] = ADOWvoltage[9];
 
 		for (uint8_t cell = 0; cell < cfg.numOfCellsPerIC; cell++) {
-			cellVoltage = 0;
 			cellVoltage = (uint16_t)(bmsData[(board * cfg.numOfCellsPerIC) + cell][2]);
-			cellVoltage = cellVoltage << 8;
+			cellVoltage <<= 8;
 			cellVoltage += (uint16_t)(bmsData[(board * cfg.numOfCellsPerIC) + cell][3]);
 
 			if ((cellVoltage - ADOWvoltage[cell]) < 1000) {
 				bmsData[(board * cfg.numOfCellsPerIC) + cell][1] |= 0b00000001;	 // negligible drop in voltage, so cell is connected
 			}
-
-			// if ((cellVoltage - ADOWvoltage[cell]) > 1000)
-			// 	bmsData[(board * cfg.numOfCellsPerIC) + cell][1] &= 0b11111110; //significant drop in voltage, so cell is disconnected
-			// else
-			// 	bmsData[(board * cfg.numOfCellsPerIC) + cell][1] |= 0b00000001; //negligible drop in voltage, so cell is connected
 		}
 	}
 
 	return dataValid;
 }
 
-bool dischargeCellGroups(BMSConfigStructTypedef config, bool cellDischarge[12][12]) {
-	BMSConfigStructTypedef *cfg;
-
-	cfg = &config;
-
+bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]) {
 	wakeup_idle();
 
-	for (uint8_t i = 0; i < config.numOfICs; i++) {
-		cfg->DischargeCell1 = cellDischarge[i][0];
-		cfg->DischargeCell2 = cellDischarge[i][1];
-		cfg->DischargeCell3 = cellDischarge[i][2];
-		cfg->DischargeCell4 = cellDischarge[i][3];
-		cfg->DischargeCell5 = cellDischarge[i][4];
-		cfg->DischargeCell6 = cellDischarge[i][5];
-		cfg->DischargeCell7 = cellDischarge[i][6];
-		cfg->DischargeCell8 = cellDischarge[i][7];
-		cfg->DischargeCell9 = cellDischarge[i][8];
-		cfg->DischargeCell10 = cellDischarge[i][9];
-		cfg->DischargeCell11 = cellDischarge[i][10];
-		cfg->DischargeCell12 = cellDischarge[i][11];
+	for (uint8_t i = 0; i < cfg->numOfICs; i++) {
+		for (uint8_t j = 0; j < 12; j++) {
+			cfg->DischargeCell[j] = cellDischarge[i][j];
+		}
 
-		writeConfigAddress(config, config.address[i]);
+		writeConfigAddress(cfg, cfg->address[i]);
 	}
 
-	cfg->DischargeCell1 = 0;
-	cfg->DischargeCell2 = 0;
-	cfg->DischargeCell3 = 0;
-	cfg->DischargeCell4 = 0;
-	cfg->DischargeCell5 = 0;
-	cfg->DischargeCell6 = 0;
-	cfg->DischargeCell7 = 0;
-	cfg->DischargeCell8 = 0;
-	cfg->DischargeCell9 = 0;
-	cfg->DischargeCell10 = 0;
-	cfg->DischargeCell11 = 0;
-	cfg->DischargeCell12 = 0;
+	for (int i = 0; i < 12; i++)
+		cfg->DischargeCell[i] = 0;
 
 	return 0;
 }
@@ -613,8 +418,6 @@ bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data) {
 	uint8_t PEC_send[6];
 	bool dataValid = true;
 
-	// PEC_send = (uint8_t *)malloc(6 * sizeof(uint8_t));
-
 	PEC_send[0] = (uint8_t)(0x80 | ((address << 3) & 0x78) | ((command >> 8) & 0x07));
 	PEC_send[1] = (uint8_t)(command & 0xFF);
 
@@ -635,7 +438,7 @@ bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data) {
 	cmd[10] = 0;
 	cmd[11] = 0;
 
-	succesfullWriteRead = SPIWriteRead(cmd, rx_data, sizeof(cmd));	// send 4 command bytes, receive 6 cell voltage bytes (4-9) and 2 PEC bytes (10-11)
+	SPIWriteRead(cmd, rx_data, sizeof(cmd));  // send 4 command bytes, receive 6 cell voltage bytes (4-9) and 2 PEC bytes (10-11)
 
 	// calculate PEC based on cell voltage data received
 	PEC_send[0] = rx_data[4];  // cell 1 voltage low bytes
@@ -695,10 +498,8 @@ bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data) {
 		data[3] = (uint16_t)((rx_data[10] << 8) & 0xFF00) | (rx_data[11] & 0x00FF);
 	}
 
-	// free(PEC_send);
-
 	return (dataValid);
-};
+}
 
 void sendBroadcastCommand(CommandCodeTypedef command) {
 	uint8_t cmd[4];
@@ -713,14 +514,12 @@ void sendBroadcastCommand(CommandCodeTypedef command) {
 	cmd[3] = PEC_return & 0xFF;
 
 	SPIWrite(cmd, 4);
-};
+}
 
 void sendAddressCommand(CommandCodeTypedef command, uint8_t address) {
 	uint8_t cmd[4];
 	uint16_t PEC_return;
 	uint8_t msbytes[2];
-
-	// msbytes = (uint8_t *)malloc(2 * sizeof(uint8_t));
 
 	msbytes[0] = (uint8_t)(0x80 | ((address << 3) & 0x78) | ((command >> 8) & 0x07));
 	msbytes[1] = (uint8_t)(command & 0xFF);
@@ -734,9 +533,7 @@ void sendAddressCommand(CommandCodeTypedef command, uint8_t address) {
 	cmd[3] = PEC_return & 0xFF;
 
 	SPIWrite(cmd, 4);
-
-	// free(msbytes);
-};
+}
 
 uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by value now that we are not using malloc (ensure no edit)
 	uint16_t remainder, address;
@@ -748,4 +545,4 @@ uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by 
 	}
 
 	return (remainder * 2);	 // The CRC15 has a 0 in the LSB so the final value must be multiplied by 2
-};
+}

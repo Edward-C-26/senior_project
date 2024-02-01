@@ -21,15 +21,15 @@ typedef enum {
 } CommandCodeTypedef;
 
 void initPECTable(void);
-void writeConfigAddress(BMSConfigStructTypedef cfg, uint8_t address);
-void writeConfigAll(BMSConfigStructTypedef cfg);
+void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address);
+void writeConfigAll(BMSConfigStructTypedef *cfg);
 bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]);
 bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]);
 bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool tempFault[4]);
 bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]);
 // bool checkCellConnection(uint16_t cellVoltage[12], bool cellConnection[12]);
 bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]);
-bool dischargeCellGroups(BMSConfigStructTypedef cfg, bool cellDischarge[12][12]);
+bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]);
 void wakeup_idle();
 // bool dischargeCell(BMSConfigStructTypedef config, bool cellDischarge[8]);
 bool readConfig(uint8_t address, uint8_t cfg[8]);

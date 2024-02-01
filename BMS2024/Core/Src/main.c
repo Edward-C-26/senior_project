@@ -119,7 +119,7 @@ int main(void) {
 
 		/* USER CODE BEGIN 3 */
 		// Reset Config Registers
-		writeConfigAll(BMSConfig);
+		writeConfigAll(&BMSConfig);
 
 		HAL_Delay(100);	 // TODO: Why is this here?
 	}

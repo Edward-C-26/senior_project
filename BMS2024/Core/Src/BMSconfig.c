@@ -90,18 +90,8 @@ void loadConfig(BMSConfigStructTypedef* cfg) {
 	cfg->UndervoltageComparisonVoltage = 0x000;
 	cfg->OvervoltageComparisonVoltage = 0x000;
 
-	cfg->DischargeCell1 = 0;
-	cfg->DischargeCell2 = 0;
-	cfg->DischargeCell3 = 0;
-	cfg->DischargeCell4 = 0;
-	cfg->DischargeCell5 = 0;
-	cfg->DischargeCell6 = 0;
-	cfg->DischargeCell7 = 0;
-	cfg->DischargeCell8 = 0;
-	cfg->DischargeCell9 = 0;
-	cfg->DischargeCell10 = 0;
-	cfg->DischargeCell11 = 0;
-	cfg->DischargeCell12 = 0;
+	for (uint8_t i = 0; i < 12; i++)
+		cfg->DischargeCell[i] = 0;
 
 	cfg->DischargeTimeoutValue = 0x0;
 }
