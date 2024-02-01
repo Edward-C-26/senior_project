@@ -8,8 +8,8 @@
 typedef enum {
 	WriteConfigurationRegisterGroup = 0x001,
 	ReadConfigurationRegisterGroup = 0x002,
-	ReadCellVoltageRegisterGroup2to3 = 0x004,
-	ReadCellVoltageRegisterGroup5to6 = 0x006,
+	ReadCellVoltageRegisterGroup1to3 = 0x004,
+	ReadCellVoltageRegisterGroup4to6 = 0x006,
 	ReadCellVoltageRegisterGroup7to9 = 0x008,
 	ReadCellVoltageRegisterGroup10to12 = 0x00A,
 	ReadAuxiliaryGroupA = 0x00C,

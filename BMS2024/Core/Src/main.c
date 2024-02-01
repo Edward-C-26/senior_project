@@ -102,7 +102,6 @@ int main(void) {
 	MX_SPI1_Init();
 	MX_SPI2_Init();
 	MX_TIM4_Init();
-
 	/* USER CODE BEGIN 2 */
 
 	SPI_Init();	 // initializes the SPIx peripheral
@@ -132,7 +131,6 @@ int main(void) {
 void SystemClock_Config(void) {
 	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
 	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-	RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
 	/** Configure the main internal regulator output voltage
 	 */
@@ -161,11 +159,6 @@ void SystemClock_Config(void) {
 	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
 		Error_Handler();
 	}
-	// PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-	// PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
-	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-		Error_Handler();
-	}
 }
 
 /**
@@ -182,10 +175,10 @@ static void MX_CAN1_Init(void) {
 	// CAN_FilterTypeDef sFilterConfig;
 	/* USER CODE END CAN1_Init 1 */
 	hcan1.Instance = CAN1;
-	hcan1.Init.Prescaler = 16;
+	hcan1.Init.Prescaler = 8;
 	hcan1.Init.Mode = CAN_MODE_NORMAL;
 	hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-	hcan1.Init.TimeSeg1 = CAN_BS1_1TQ;
+	hcan1.Init.TimeSeg1 = CAN_BS1_2TQ;
 	hcan1.Init.TimeSeg2 = CAN_BS2_1TQ;
 	hcan1.Init.TimeTriggeredMode = DISABLE;
 	hcan1.Init.AutoBusOff = DISABLE;

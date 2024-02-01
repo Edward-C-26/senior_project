@@ -606,7 +606,7 @@ void wakeup_idle() {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
-bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t &data) {  // changed to take array by reference now that malloc is removed
+bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data) {  // changed to take array by reference now that malloc is removed
 	uint8_t cmd[12];
 	uint8_t rx_data[12];
 	uint16_t PEC_return;
@@ -738,7 +738,7 @@ void sendAddressCommand(CommandCodeTypedef command, uint8_t address) {
 	// free(msbytes);
 };
 
-uint16_t calculatePEC(uint8_t len, uint8_t data) {	// changed to take data by value now that we are not using malloc (ensure no edit)
+uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by value now that we are not using malloc (ensure no edit)
 	uint16_t remainder, address;
 	remainder = 16;	 // PEC seed
 
