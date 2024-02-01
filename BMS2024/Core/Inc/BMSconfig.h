@@ -1,10 +1,12 @@
+#ifndef BMS_CONFIG_H
+#define BMS_CONFIG_H
+
 #include "main.h"
 #include "stdbool.h"
 #include "stdlib.h"
 #include "string.h"
 
 typedef struct {
-
 	// General BMS configuration
 	uint8_t numOfICs;
 	uint8_t address[16];
@@ -59,3 +61,5 @@ typedef struct {
 } BMSConfigStructTypedef;
 
 void loadConfig(BMSConfigStructTypedef* config);
+
+#endif	// BMS_CONFIG_H
