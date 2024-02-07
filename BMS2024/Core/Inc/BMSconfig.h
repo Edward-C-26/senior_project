@@ -18,6 +18,8 @@ typedef struct {
 	uint16_t OV_threshold;
 	uint16_t UV_threshold;
 	uint16_t LUV_threshold;
+	uint16_t OT_threshold;
+	uint16_t UT_threshold;
 	uint16_t HUV_threshold;
 	uint16_t slowCharge_threshold;
 	uint16_t stopCharge_threshold;

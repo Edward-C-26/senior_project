@@ -25,6 +25,7 @@
 
 #include "BMSconfig.h"
 #include "LTC6811.h"
+#include "Fault.h"
 #include "SPI.h"
 /* USER CODE END Includes */
 
@@ -87,6 +88,7 @@ int main(void) {
 
 	/* USER CODE BEGIN Init */
 	BMSConfigStructTypedef BMSConfig;
+	BMS_critical_info_t BMSCriticalInfo;
 
 	/* USER CODE END Init */
 
@@ -108,6 +110,7 @@ int main(void) {
 	SPI_Init();	 // initializes the SPIx peripheral
 	initPECTable();
 	loadConfig(&BMSConfig);
+	init_BMS_info(&BMSCriticalInfo, &BMSConfig);
 	HAL_CAN_Start(&hcan1);
 
 	/* USER CODE END 2 */
@@ -122,6 +125,20 @@ int main(void) {
 		writeConfigAll(&BMSConfig);
 
 		HAL_Delay(100);	 // TODO: Why is this here?
+
+		/* DO THIS WHEN TESTING BMS FAULTS*/
+		// bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
+		// if (BMS_FAULT == false) {
+		// global_error_count = 0;
+		// HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_RESET);
+		// } else {
+		// 	global_error_count++;
+		// 	if (global_error_count == 20) {
+		// 		global_error_count = 0;
+		// 		HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_SET);
+		// 	}
+		// }
+
 	}
 	/* USER CODE END 3 */
 }
