@@ -1,6 +1,7 @@
 #ifndef FAULT_H
 #define FAULT_H
 
+
 #define NUM_CELLS 144
 #define NUM_BOARDS 12
 #define NUM_TEMPS_PER_BOARD 4   // 4 Temperature readings per board
@@ -11,7 +12,7 @@
 
 #include "BMSconfig.h"
 
-typedef struct BMS_critical_info_t {
+typedef struct {
     uint16_t curr_max_voltage;
     uint8_t max_volt_cell;
     uint16_t curr_min_voltage;
@@ -31,7 +32,7 @@ typedef struct BMS_critical_info_t {
     bool is_fault;
     uint8_t fault_board_num;
 
-};
+}BMS_critical_info_t;
 
 void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cfg);
 bool FAULT_check(BMSConfigStructTypedef cfg, BMS_critical_info_t bms_struct, uint8_t bmsData[144][6], uint8_t bmsStatus[6]);

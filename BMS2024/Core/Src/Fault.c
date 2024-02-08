@@ -7,14 +7,14 @@
 //! \returns None
 void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cfg) {
 
-    bms_struct->curr_max_voltage = cfg.UV_threshold + 1;   // assings min voltage threshold for init
+    bms_struct->curr_max_voltage = cfg->UV_threshold + 1;   // assings min voltage threshold for init
     bms_struct->max_volt_cell = -1;
-    bms_struct->curr_min_voltage = cfg.OV_threshold - 1;   //asigns max voltage threshold for init 
+    bms_struct->curr_min_voltage = cfg->OV_threshold - 1;   //asigns max voltage threshold for init
     bms_struct->min_volt_cell = -1;
 
-    bms_struct->curr_max_temp = cfg.UT_threshold + 1;
+    bms_struct->curr_max_temp = cfg->UT_threshold + 1;
     bms_struct->max_temp_cell = -1;
-    bms_struct->curr_min_temp = cfg.OT_threshold - 1;        // assigns really hot temp for init
+    bms_struct->curr_min_temp = cfg->OT_threshold - 1;        // assigns really hot temp for init
     bms_struct->min_temp_cell = -1;
 
     bms_struct->invalid_data = false;
@@ -36,10 +36,10 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
 //! \returns true if there is a BMS fault, and false if the system has returned no faults
 bool FAULT_check(BMSConfigStructTypedef cfg, BMS_critical_info_t bms_struct, uint8_t bmsData[144][6], uint8_t bmsStatus[6]) {
     bool BMS_fault = false;
-    bool OT_fault = false;
-    bool UT_fault = false;
-    bool OV_fault = false;
-    bool UV_fault = false;
+//    bool OT_fault = false;
+//    bool UT_fault = false;
+//    bool OV_fault = false;
+//    bool UV_fault = false;
 
 
     // Clear out status bytes (protects against reset)

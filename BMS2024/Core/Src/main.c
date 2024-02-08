@@ -78,9 +78,9 @@ static void MX_TIM4_Init(void);
  */
 int main(void) {
 	/* USER CODE BEGIN 1 */
-
+	uint32_t david = 0;
 	/* USER CODE END 1 */
-
+	david++;
 	/* MCU Configuration--------------------------------------------------------*/
 
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -119,12 +119,13 @@ int main(void) {
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 		/* USER CODE END WHILE */
+		david++;
 
 		/* USER CODE BEGIN 3 */
 		// Reset Config Registers
-		writeConfigAll(&BMSConfig);
+//		writeConfigAll(&BMSConfig);
 
-		HAL_Delay(100);	 // TODO: Why is this here?
+//		HAL_Delay(100);	 // TODO: Why is this here?
 
 		/* DO THIS WHEN TESTING BMS FAULTS*/
 		// bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
