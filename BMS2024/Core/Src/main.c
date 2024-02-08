@@ -54,6 +54,9 @@ SPI_HandleTypeDef hspi2;
 TIM_HandleTypeDef htim4;
 
 /* USER CODE BEGIN PV */
+SPI_HandleTypeDef* ltc_spi = &hspi1;
+SPI_HandleTypeDef* eeprom_spi = &hspi2;
+
 bool CHARGE_EN = 1;
 bool BALANCE_EN = 0;
 bool BMS_FAULT = 0;
@@ -427,7 +430,7 @@ void Error_Handler(void) {
  * @param  line: assert_param error line source number
  * @retval None
  */
-void assert_failed(uint8_t *file, uint32_t line) {
+void assert_failed(uint8_t* file, uint32_t line) {
 	/* USER CODE BEGIN 6 */
 	/* User can add his own implementation to report the file name and line number,
 	   ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
