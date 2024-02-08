@@ -25,6 +25,7 @@
 
 #include "BMSconfig.h"
 #include "LTC6811.h"
+// #include "LTC2949.h"
 #include "Fault.h"
 #include "SPI.h"
 /* USER CODE END Includes */
@@ -53,6 +54,19 @@ SPI_HandleTypeDef hspi2;
 TIM_HandleTypeDef htim4;
 
 /* USER CODE BEGIN PV */
+bool CHARGE_EN = 1;
+bool BALANCE_EN = 0;
+bool BMS_FAULT = 0;
+
+uint8_t CELLVAL_DATA[6];
+uint16_t david = -2;
+
+uint8_t charge_rate = 2;
+
+uint8_t BMS_DATA[144][6];
+uint8_t BMS_STATUS[6];
+bool discharge[12][12];
+bool full_discharge[12][12];
 
 /* USER CODE END PV */
 
@@ -78,9 +92,9 @@ static void MX_TIM4_Init(void);
  */
 int main(void) {
 	/* USER CODE BEGIN 1 */
-	uint32_t david = 0;
+
 	/* USER CODE END 1 */
-	david++;
+
 	/* MCU Configuration--------------------------------------------------------*/
 
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -111,6 +125,7 @@ int main(void) {
 	initPECTable();
 	loadConfig(&BMSConfig);
 	init_BMS_info(&BMSCriticalInfo, &BMSConfig);
+
 	HAL_CAN_Start(&hcan1);
 
 	/* USER CODE END 2 */
@@ -123,9 +138,14 @@ int main(void) {
 
 		/* USER CODE BEGIN 3 */
 		// Reset Config Registers
-//		writeConfigAll(&BMSConfig);
+		writeConfigAll(&BMSConfig);
 
-//		HAL_Delay(100);	 // TODO: Why is this here?
+		HAL_Delay(100);	 // TODO: Why is this here?
+
+		/** FUNCTION CALL OVERVIEW
+		 * First: Call read2949
+		 * Second: Call read6811 -> Voltages, Temps on 6811
+		*/
 
 		/* DO THIS WHEN TESTING BMS FAULTS*/
 		// bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);

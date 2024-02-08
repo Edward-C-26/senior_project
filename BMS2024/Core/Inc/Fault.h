@@ -1,11 +1,6 @@
 #ifndef FAULT_H
 #define FAULT_H
 
-
-#define NUM_CELLS 144
-#define NUM_BOARDS 12
-#define NUM_TEMPS_PER_BOARD 4   // 4 Temperature readings per board
-
 // Need to account for this is main or when we get 2949 data so we don't have to worry here
 #define INVALID_VOLTAGE_UPPER_THRESHOLD   45000
 #define INVALID_VOLTAGE_LOWER_THRESHOLD   25000

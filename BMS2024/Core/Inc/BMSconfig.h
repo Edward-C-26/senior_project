@@ -6,6 +6,10 @@
 #include "stdlib.h"
 #include "string.h"
 
+#define NUM_CELLS	144
+#define NUM_BOARDS	12
+#define NUM_TEMPS	4
+
 typedef struct {
 	// General BMS configuration
 	uint8_t numOfICs;
