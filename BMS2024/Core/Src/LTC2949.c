@@ -264,7 +264,7 @@ bool readRegister2949(CommandCodeTypedef2949 command, uint16_t * data) {
 	bool dataValid = true;
     uint8_t readLength; // number of bytes you want to receive from the comand
     bool readLengthArray[4];
-    bool successfulWriteRead;
+    // bool successfulWriteRead;
 
     wakeup_idle();
 
@@ -319,7 +319,8 @@ bool readRegister2949(CommandCodeTypedef2949 command, uint16_t * data) {
 	cmd[11] = 0;
     cmd[12] = 0;
 
-	successfulWriteRead = SPIWriteRead(cmd, rx_data, 7 + readLength);	// send 5 command bytes, receive up to 6 bytes of data and 2 PEC bytes
+	// successfulWriteRead = SPIWriteRead(cmd, rx_data, 7 + readLength);	// send 5 command bytes, receive up to 6 bytes of data and 2 PEC bytes
+	SPIWriteRead(cmd, rx_data, 7 + readLength);	// send 5 command bytes, receive up to 6 bytes of data and 2 PEC bytes
 
 	// calculate PEC based on data received
     
@@ -369,7 +370,7 @@ bool readPackCurrent(){
     bool PEC_check = false;
     uint16_t tempCurrent[2];
     int32_t current;
-    PEC_check = readRegister2949(ReadCurr1, &tempCurrent);
+    PEC_check = readRegister2949(ReadCurr1, tempCurrent);
     datavalid = datavalid & PEC_check;
     current = (((tempCurrent[0] << 16) & 0x00FF0000) | ((tempCurrent[1]) & 0x0000FFFF));
     current = (current << 8) >> 8; // sign extending
@@ -382,7 +383,7 @@ bool readPackVoltage(){
     bool PEC_check = false;
     uint16_t tempVoltage[1];
     int32_t voltage;
-    PEC_check = readRegister2949(ReadVolt, &tempVoltage);
+    PEC_check = readRegister2949(ReadVolt, tempVoltage);
     datavalid = datavalid & PEC_check;
     voltage = (tempVoltage[0] & 0x0000FFFF);
     voltage = (voltage << 16) >> 16; // sign extending
@@ -395,7 +396,7 @@ bool readPackPower(){
     bool PEC_check = false;
     uint16_t tempPower[2];
     int32_t power;
-    PEC_check = readRegister2949(ReadPow1, &tempPower);
+    PEC_check = readRegister2949(ReadPow1, tempPower);
     datavalid = datavalid & PEC_check;
     power = (((tempPower[0] << 16) & 0x00FF0000) | ((tempPower[1]) & 0x0000FFFF));
     power = (power << 8) >> 8; // sign extending
@@ -408,9 +409,9 @@ bool readPackCharge(){
     bool PEC_check = false;
     uint16_t tempCharge[3];
     int64_t charge;
-//    PEC_check = readRegister2949(ReadCharge1, &tempCharge);
+    PEC_check = readRegister2949(ReadCharge1, tempCharge);
     datavalid = datavalid & PEC_check;
-    charge = (((tempCharge[0] << 32) & 0x0000FFFF00000000) |  ((tempCharge[1] << 16) & 0x00000000FFFF0000) | ((tempCharge[2]) & 0x000000000000FFFF));
+    charge = ((((int64_t)tempCharge[0] << 32) & 0x0000FFFF00000000) |  ((((int64_t)tempCharge[1]) << 16) & 0x00000000FFFF0000) | (((int64_t)tempCharge[2]) & 0x000000000000FFFF));
     charge = (charge << 16) >> 16; // sign extending
     packCharge = (int32_t)(charge * 377887 / 50000000000); // charge in C downcasted from 64 bits
     return datavalid;
@@ -421,9 +422,9 @@ bool readPackEnergy(){
     bool PEC_check = false;
     uint16_t tempEnergy[3];
     int64_t energy;
-    PEC_check = readRegister2949(ReadCharge1, &tempEnergy);
+    PEC_check = readRegister2949(ReadCharge1, tempEnergy);
     datavalid = datavalid & PEC_check;
-    energy = (((tempEnergy[0] << 32) & 0x0000FFFF00000000) |  ((tempEnergy[1] << 16) & 0x00000000FFFF0000) | ((tempEnergy[2]) & 0x000000000000FFFF));
+    energy = ((((int64_t)tempEnergy[0] << 32) & 0x0000FFFF00000000) |  (((int64_t)tempEnergy[1] << 16) & 0x00000000FFFF0000) | (((int64_t)tempEnergy[2]) & 0x000000000000FFFF));
     energy = (energy << 16) >> 16; // sign extending
     packEnergy = (int32_t)(energy * 232175 / 5000000000); // energy in J downcasted from 64 bits
     return datavalid;
@@ -435,7 +436,7 @@ bool readMaxMinCurrent(){
     uint16_t tempCurrent[2];
     int32_t maxCurr;
     int32_t minCurr;
-    PEC_check = readRegister2949(ReadMaxMinCurr, &tempCurrent);
+    PEC_check = readRegister2949(ReadMaxMinCurr, tempCurrent);
     datavalid = datavalid & PEC_check;
     maxCurr = (tempCurrent[0] & 0x0000FFFF);
     minCurr = (tempCurrent[1] & 0x0000FFFF);
@@ -454,7 +455,7 @@ bool readMaxMinPower(){
     uint16_t tempPower[2];
     int32_t maxPow;
     int32_t minPow;
-    PEC_check = readRegister2949(ReadMaxMinCurr, &tempPower);
+    PEC_check = readRegister2949(ReadMaxMinCurr, tempPower);
     datavalid = datavalid & PEC_check;
     maxPow = (tempPower[0] & 0x0000FFFF);
     minPow = (tempPower[1] & 0x0000FFFF);

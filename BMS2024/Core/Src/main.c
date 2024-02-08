@@ -25,7 +25,7 @@
 
 #include "BMSconfig.h"
 #include "LTC6811.h"
-// #include "LTC2949.h"
+#include "LTC2949.h"
 #include "Fault.h"
 #include "SPI.h"
 /* USER CODE END Includes */

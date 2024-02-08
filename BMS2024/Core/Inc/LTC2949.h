@@ -3,22 +3,22 @@
 
 #include "SPI.h"
 #include "BMSconfig.h"
-#include <math.h>
+#include "math.h"
 
 
 // data variables
 
-int32_t packCurrent;
-int32_t packVoltage;
-int32_t packPower;
-int32_t packCharge;
-int32_t packEnergy;
-int32_t maxCurrent;
-int32_t minCurrent;
-int32_t maxPower;
-int32_t minPower;
-int32_t maxVoltage;
-int32_t minVoltage;
+extern int32_t packCurrent;
+extern int32_t packVoltage;
+extern int32_t packPower;
+extern int32_t packCharge;
+extern int32_t packEnergy;
+extern int32_t maxCurrent;
+extern int32_t minCurrent;
+extern int32_t maxPower;
+extern int32_t minPower;
+extern int32_t maxVoltage;
+extern int32_t minVoltage;
 
 // CONSTANTS
 
