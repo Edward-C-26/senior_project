@@ -24,6 +24,8 @@
 #include <stdbool.h>
 
 #include "BMSconfig.h"
+#include "Fault.h"
+#include "LTC2949.h"
 #include "LTC6811.h"
 #include "SPI.h"
 /* USER CODE END Includes */
@@ -52,6 +54,22 @@ SPI_HandleTypeDef hspi2;
 TIM_HandleTypeDef htim4;
 
 /* USER CODE BEGIN PV */
+SPI_HandleTypeDef* ltc_spi = &hspi1;
+SPI_HandleTypeDef* eeprom_spi = &hspi2;
+
+bool CHARGE_EN = 1;
+bool BALANCE_EN = 0;
+bool BMS_FAULT = 0;
+
+uint8_t CELLVAL_DATA[6];
+uint16_t david = -2;
+
+uint8_t charge_rate = 2;
+
+uint8_t BMS_DATA[144][6];
+uint8_t BMS_STATUS[6];
+bool discharge[12][12];
+bool full_discharge[12][12];
 
 /* USER CODE END PV */
 
@@ -87,6 +105,7 @@ int main(void) {
 
 	/* USER CODE BEGIN Init */
 	BMSConfigStructTypedef BMSConfig;
+	BMS_critical_info_t BMSCriticalInfo;
 
 	/* USER CODE END Init */
 
@@ -108,6 +127,8 @@ int main(void) {
 	SPI_Init();	 // initializes the SPIx peripheral
 	initPECTable();
 	loadConfig(&BMSConfig);
+	init_BMS_info(&BMSCriticalInfo, &BMSConfig);
+
 	HAL_CAN_Start(&hcan1);
 
 	/* USER CODE END 2 */
@@ -122,6 +143,24 @@ int main(void) {
 		writeConfigAll(&BMSConfig);
 
 		HAL_Delay(100);	 // TODO: Why is this here?
+
+		/** FUNCTION CALL OVERVIEW
+		 * First: Call read2949
+		 * Second: Call read6811 -> Voltages, Temps on 6811
+		 */
+
+		/* DO THIS WHEN TESTING BMS FAULTS*/
+		// bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
+		// if (BMS_FAULT == false) {
+		// global_error_count = 0;
+		// HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_RESET);
+		// } else {
+		// 	global_error_count++;
+		// 	if (global_error_count == 20) {
+		// 		global_error_count = 0;
+		// 		HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_SET);
+		// 	}
+		// }
 	}
 	/* USER CODE END 3 */
 }
@@ -137,7 +176,7 @@ void SystemClock_Config(void) {
 	/** Configure the main internal regulator output voltage
 	 */
 	__HAL_RCC_PWR_CLK_ENABLE();
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
@@ -145,7 +184,13 @@ void SystemClock_Config(void) {
 	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
 	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
 	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+	RCC_OscInitStruct.PLL.PLLM = 16;
+	RCC_OscInitStruct.PLL.PLLN = 256;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+	RCC_OscInitStruct.PLL.PLLQ = 2;
+	RCC_OscInitStruct.PLL.PLLR = 2;
 	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
 		Error_Handler();
 	}
@@ -153,12 +198,12 @@ void SystemClock_Config(void) {
 	/** Initializes the CPU, AHB and APB buses clocks
 	 */
 	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLRCLK;
 	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV16;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV16;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK) {
 		Error_Handler();
 	}
 }
@@ -385,7 +430,7 @@ void Error_Handler(void) {
  * @param  line: assert_param error line source number
  * @retval None
  */
-void assert_failed(uint8_t *file, uint32_t line) {
+void assert_failed(uint8_t* file, uint32_t line) {
 	/* USER CODE BEGIN 6 */
 	/* User can add his own implementation to report the file name and line number,
 	   ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */

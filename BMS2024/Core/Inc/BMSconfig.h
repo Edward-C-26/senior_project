@@ -6,6 +6,10 @@
 #include "stdlib.h"
 #include "string.h"
 
+#define NUM_CELLS	144
+#define NUM_BOARDS	12
+#define NUM_TEMPS	4
+
 typedef struct {
 	// General BMS configuration
 	uint8_t numOfICs;
@@ -18,6 +22,8 @@ typedef struct {
 	uint16_t OV_threshold;
 	uint16_t UV_threshold;
 	uint16_t LUV_threshold;
+	uint16_t OT_threshold;
+	uint16_t UT_threshold;
 	uint16_t HUV_threshold;
 	uint16_t slowCharge_threshold;
 	uint16_t stopCharge_threshold;
