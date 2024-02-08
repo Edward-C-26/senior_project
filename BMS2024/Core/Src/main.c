@@ -24,9 +24,9 @@
 #include <stdbool.h>
 
 #include "BMSconfig.h"
-#include "LTC6811.h"
-#include "LTC2949.h"
 #include "Fault.h"
+#include "LTC2949.h"
+#include "LTC6811.h"
 #include "SPI.h"
 /* USER CODE END Includes */
 
@@ -134,7 +134,6 @@ int main(void) {
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 		/* USER CODE END WHILE */
-		david++;
 
 		/* USER CODE BEGIN 3 */
 		// Reset Config Registers
@@ -145,7 +144,7 @@ int main(void) {
 		/** FUNCTION CALL OVERVIEW
 		 * First: Call read2949
 		 * Second: Call read6811 -> Voltages, Temps on 6811
-		*/
+		 */
 
 		/* DO THIS WHEN TESTING BMS FAULTS*/
 		// bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
@@ -159,7 +158,6 @@ int main(void) {
 		// 		HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_SET);
 		// 	}
 		// }
-
 	}
 	/* USER CODE END 3 */
 }
@@ -175,7 +173,7 @@ void SystemClock_Config(void) {
 	/** Configure the main internal regulator output voltage
 	 */
 	__HAL_RCC_PWR_CLK_ENABLE();
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
@@ -183,7 +181,13 @@ void SystemClock_Config(void) {
 	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
 	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
 	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+	RCC_OscInitStruct.PLL.PLLM = 16;
+	RCC_OscInitStruct.PLL.PLLN = 256;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+	RCC_OscInitStruct.PLL.PLLQ = 2;
+	RCC_OscInitStruct.PLL.PLLR = 2;
 	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
 		Error_Handler();
 	}
@@ -191,12 +195,12 @@ void SystemClock_Config(void) {
 	/** Initializes the CPU, AHB and APB buses clocks
 	 */
 	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLRCLK;
 	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV16;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV16;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK) {
 		Error_Handler();
 	}
 }
