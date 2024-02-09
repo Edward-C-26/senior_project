@@ -6,10 +6,10 @@
 //! \param bms_struct is the struct that will be filled with critical values 
 //! \returns None
 void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cfg) {
-
+    // Init 6811 Readings
     bms_struct->curr_max_voltage = cfg->UV_threshold + 1;   // assings min voltage threshold for init
     bms_struct->max_volt_cell = -1;
-    bms_struct->curr_min_voltage = cfg->OV_threshold - 1;   //asigns max voltage threshold for init
+    bms_struct->curr_min_voltage =cfg->UV_threshold + 1;   //asigns max voltage threshold for init
     bms_struct->min_volt_cell = -1;
 
     bms_struct->curr_max_temp = cfg->UT_threshold + 1;
@@ -17,6 +17,18 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
     bms_struct->curr_min_temp = cfg->OT_threshold - 1;        // assigns really hot temp for init
     bms_struct->min_temp_cell = -1;
 
+    // Init 2949 Readings
+    bms_struct->packCurrent = 0;
+    bms_struct->packVoltage = 0;
+    bms_struct->packPower = 0;
+    bms_struct->packCharge = 0;
+    bms_struct->packEnergy = 0;
+    bms_struct->max_power = 0;
+    bms_struct->min_power = 0;
+    bms_struct->max_voltage_2949 = cfg->UV_threshold + 1;
+    bms_struct->min_voltage_2949 = cfg->UV_threshold + 1;
+
+    // Init other readings
     bms_struct->invalid_data = false;
     bms_struct->invalid_data_cell = -1;
 

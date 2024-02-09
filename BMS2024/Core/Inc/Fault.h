@@ -8,16 +8,30 @@
 #include "BMSconfig.h"
 
 typedef struct {
+    // 6811 readings
     uint16_t curr_max_voltage;
     uint8_t max_volt_cell;
     uint16_t curr_min_voltage;
     uint8_t min_volt_cell;
+
+    uint16_t packCurrent;
+    uint16_t packVoltage;
+    uint16_t packPower;
+    uint16_t packCharge;
+    uint16_t packEnergy;
+
+    // 2949 readings
+    uint16_t max_power;
+    uint16_t min_power;
+    uint16_t max_voltage_2949;
+    uint16_t min_voltage_2949;
 
     uint16_t curr_max_temp;
     uint8_t max_temp_cell;
     uint16_t curr_min_temp;
     uint8_t min_temp_cell;
 
+    // additional readings
     bool invalid_data;
     uint8_t invalid_data_cell;
 

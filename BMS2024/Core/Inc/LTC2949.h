@@ -8,17 +8,17 @@
 
 // data variables
 
-extern int32_t packCurrent;
-extern int32_t packVoltage;
-extern int32_t packPower;
-extern int32_t packCharge;
-extern int32_t packEnergy;
-extern int32_t maxCurrent;
-extern int32_t minCurrent;
-extern int32_t maxPower;
-extern int32_t minPower;
-extern int32_t maxVoltage;
-extern int32_t minVoltage;
+// extern int32_t packCurrent;
+// extern int32_t packVoltage;
+// extern int32_t packPower;
+// extern int32_t packCharge;
+// extern int32_t packEnergy;
+// extern int32_t maxCurrent;
+// extern int32_t minCurrent;
+// extern int32_t maxPower;
+// extern int32_t minPower;
+// extern int32_t maxVoltage;
+// extern int32_t minVoltage;
 
 // CONSTANTS
 
@@ -55,17 +55,17 @@ typedef enum {
 } CommandCodeTypedef2949;
 
 bool readRegister2949(CommandCodeTypedef2949 command, uint16_t * data);
-bool readPackCurrent();
-bool readPackVoltage();
-bool readPackPower();
-bool readPackCharge();
-bool readPackEnergy();
-bool readMaxMinCurrent();
-bool readMaxMinPower();
-bool readMaxMinVoltage();
-// void init_PEC15_Table(void);
-//uint16_t calculatePEC(uint8_t len, uint8_t *data);
-//void wakeup_idle(void);
+bool readPackCurrent(BMS_critical_info_t bms);
+bool readPackVoltage(BMS_critical_info_t bms);
+bool readPackPower(BMS_critical_info_t bms);
+bool readPackCharge(BMS_critical_info_t bms);
+bool readPackEnergy(BMS_critical_info_t bms);
+bool readMaxMinCurrent(BMS_critical_info_t bms);
+bool readMaxMinPower(BMS_critical_info_t bms);
+bool readMaxMinVoltage(BMS_critical_info_t bms);
+//void init_2949_PEC15_Table();
+//uint16_t 2949_calculatePEC(uint8_t len, uint8_t *data);
+//void 2949_wakeup_idle(void);
 uint8_t detectFaults(void);
 
 #endif	//LTC_2949
