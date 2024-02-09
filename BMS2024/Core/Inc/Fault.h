@@ -25,6 +25,9 @@ typedef struct {
     uint16_t min_power;
     uint16_t max_voltage_2949;
     uint16_t min_voltage_2949;
+    
+    uint16_t max_curr_2949;
+    uint16_t min_curr_2949;
 
     uint16_t curr_max_temp;
     uint8_t max_temp_cell;

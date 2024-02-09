@@ -402,8 +402,8 @@ bool readMaxMinCurrent(BMS_critical_info_t bms){
     minCurr = (minCurr << 16) >> 16; // sign extending
     maxCurr = (maxCurr * 3800 / 50); // max current in mA
     minCurr = (minCurr * 3800 / 50); // min current in mA
-    bms.maxCurrent = (uint32_t)(maxCurr);
-    bms.minCurrent = (uint32_t)(minCurr);
+    bms.max_curr_2949 = (uint32_t)(maxCurr);
+    bms.min_curr_2949 = (uint32_t)(minCurr);
     return datavalid;
 }
 
@@ -425,7 +425,30 @@ bool readMaxMinPower(BMS_critical_info_t bms){
     minPow = (minPow << 16) >> 16; // sign extending
     maxPow = (maxPow * 23347 / 50); // max power in mW
     minPow = (minPow * 23347 / 50); // min power in mW
-    bms.maxPower = (uint32_t)(maxPow);
-    bms.minPower = (uint32_t)(minPow);
+    bms.max_power = (uint32_t)(maxPow);
+    bms.min_power = (uint32_t)(minPow);
+    return datavalid;
+}
+
+//! \brief called by readRegister2949, reads the minimum & maximum pack voltage and converts to unit value--
+//      also stores value in bms struct 
+//! \param bms is the bms struct that stores critical info
+//! \returns true if PEC calc matches PEC received
+bool readMaxMinVoltage(BMS_critical_info_t bms){
+    bool datavalid = true;
+    bool PEC_check = false;
+    uint16_t tempVoltage[2];
+    int32_t maxVoltage;
+    int32_t minVoltage;
+    PEC_check = readRegister2949(ReadMaxMinVoltage, tempVoltage);
+    datavalid = datavalid & PEC_check;
+    maxVoltage = (tempPower[0] & 0x0000FFFF);
+    minVoltage = (tempPower[1] & 0x0000FFFF);
+    maxVoltage = (maxVoltage << 16) >> 16; // sign extending
+    minVoltage = (minVoltage << 16) >> 16; // sign extending
+    maxVoltage = (maxVoltage * 23347 / 50); // max power in mW
+    minVoltage = (minVoltage * 23347 / 50); // min power in mW
+    bms.max_voltage_2949 = (uint32_t)(maxVoltage);
+    bms.min_voltage_2949 = (uint32_t)(minVoltage);
     return datavalid;
 }
