@@ -28,6 +28,9 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
     bms_struct->max_voltage_2949 = cfg->UV_threshold + 1;
     bms_struct->min_voltage_2949 = cfg->UV_threshold + 1;
 
+    bms_struct->max_curr_2949 = 0;
+    bms_struct->min_curr_2949 = 0;
+
     // Init other readings
     bms_struct->invalid_data = false;
     bms_struct->invalid_data_cell = -1;
