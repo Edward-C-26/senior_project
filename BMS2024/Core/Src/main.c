@@ -22,7 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
-
 #include "BMSconfig.h"
 #include "Fault.h"
 #include "LTC2949.h"
@@ -63,8 +62,12 @@ bool BMS_FAULT = 0;
 
 uint8_t CELLVAL_DATA[6];
 uint16_t david = -2;
+uint16_t adi = 0;
+uint16_t * buff_2949;
+bool ret_2949;
 
-uint8_t charge_rate = 2;
+uint8_t chargeRate = 2;
+uint8_t balanceCounter = 0;
 
 uint8_t BMS_DATA[144][6];
 uint8_t BMS_STATUS[6];
@@ -120,12 +123,13 @@ int main(void) {
 	MX_GPIO_Init();
 	MX_CAN1_Init();
 	MX_SPI1_Init();
-	MX_SPI2_Init();
+//	MX_SPI2_Init();
 	MX_TIM4_Init();
 	/* USER CODE BEGIN 2 */
 
 	SPI_Init();	 // initializes the SPIx peripheral
-	initPECTable();
+//	initPECTable();
+//	init_PEC15_Table_2949();
 	loadConfig(&BMSConfig);
 	init_BMS_info(&BMSCriticalInfo, &BMSConfig);
 
@@ -139,14 +143,25 @@ int main(void) {
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
+		david++;
 		// Reset Config Registers
-		writeConfigAll(&BMSConfig);
+//		writeConfigAll(&BMSConfig);
 
-		HAL_Delay(100);	 // TODO: Why is this here?
+//		HAL_Delay(100);	 // TODO: Why is this here?
+//		ret_2949 = readRegister2949(ReadMaxMinCurr, buff_2949);
+		BMSCriticalInfo.packCurrent = 100;
+		ret_2949 = readPackCurrent(BMSCriticalInfo);
+		if(ret_2949 == true) {
+			adi = 1;
+		} else {
+			adi = 2;
+		}
 
 		/** FUNCTION CALL OVERVIEW
 		 * First: Call read2949
 		 * Second: Call read6811 -> Voltages, Temps on 6811
+		 * Third: Check for Faults
+		 * Fourth: Call balancing algorithm 
 		 */
 
 		/* DO THIS WHEN TESTING BMS FAULTS*/
@@ -160,6 +175,31 @@ int main(void) {
 		// 		global_error_count = 0;
 		// 		HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_SET);
 		// 	}
+		// }
+
+		// Balance if charging and if balancing enabled
+		// if (CHARGE_EN == 0 && BALANCE_EN) {
+		// 	if(chargeRate != 0) {
+		// 		balance(BMSConfig, BMSCriticalInfo, BMS_DATA, discharge, full_discharge, balanceCounter);
+		// 	}
+
+		// 	balanceCounter++;
+
+		// 	if (balanceCounter == 12) {
+		// 		balanceCounter = 0;
+		// 	}
+
+		// 	setChargerTxData(BMSConfig);
+
+		// 	if (chargeRate != 0) {
+		// 		dischargeCellGroups(&BMSConfig, discharge);
+		// 		HAL_Delay(BMSConfig.dischargeTime);
+		// 	} else {
+		// 		checkDischarge(BMSConfig, full_discharge, BMS_DATA);
+		// 		dischargeCellGroups(&BMSConfig, full_discharge);
+		// 		HAL_Delay(BMSConfig.dischargeTime);
+		// 	}
+
 		// }
 	}
 	/* USER CODE END 3 */

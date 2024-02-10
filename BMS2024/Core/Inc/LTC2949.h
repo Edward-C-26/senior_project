@@ -4,24 +4,9 @@
 #include "SPI.h"
 #include "BMSconfig.h"
 #include "math.h"
-
-
-// data variables
-
-extern int32_t packCurrent;
-extern int32_t packVoltage;
-extern int32_t packPower;
-extern int32_t packCharge;
-extern int32_t packEnergy;
-extern int32_t maxCurrent;
-extern int32_t minCurrent;
-extern int32_t maxPower;
-extern int32_t minPower;
-extern int32_t maxVoltage;
-extern int32_t minVoltage;
+#include "Fault.h"
 
 // CONSTANTS
-
 typedef enum {
     // data registers
     ReadCharge1 = 0x00,
@@ -35,14 +20,11 @@ typedef enum {
     // ReadMaxMinTemp = 0x54, this is chip temperature, not pack temp
 
     // command constants
-
     DirectCommand = 0xFE,
     ControlRegister = 0xFF,
     FlipPage1 = 0x81,
     FlipPage0 = 0x01,
     Write1Byte = 0x45
-
-
 
     // Faults are unused
     // ReadSTATVT = 0x81, // voltage/temp
@@ -51,21 +33,19 @@ typedef enum {
     // ReadSTATE = 0x84, // Energy
     // ReadSTATVCC = 0x87, // VCC
 
-
 } CommandCodeTypedef2949;
 
 bool readRegister2949(CommandCodeTypedef2949 command, uint16_t * data);
-bool readPackCurrent();
-bool readPackVoltage();
-bool readPackPower();
-bool readPackCharge();
-bool readPackEnergy();
-bool readMaxMinCurrent();
-bool readMaxMinPower();
-bool readMaxMinVoltage();
-// void init_PEC15_Table(void);
-//uint16_t calculatePEC(uint8_t len, uint8_t *data);
-//void wakeup_idle(void);
-uint8_t detectFaults(void);
+bool readPackCurrent(BMS_critical_info_t bms);
+bool readPackVoltage(BMS_critical_info_t bms);
+bool readPackPower(BMS_critical_info_t bms);
+bool readPackCharge(BMS_critical_info_t bms);
+bool readPackEnergy(BMS_critical_info_t bms);
+bool readMaxMinCurrent(BMS_critical_info_t bms);
+bool readMaxMinPower(BMS_critical_info_t bms);
+bool readMaxMinVoltage(BMS_critical_info_t bms);
+void init_PEC15_Table_2949();
+uint16_t calculatePEC_2949(uint8_t len, uint8_t *data);
+void wakeup_idle_2949(void);
 
 #endif	//LTC_2949
