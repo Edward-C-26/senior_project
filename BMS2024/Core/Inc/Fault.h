@@ -14,11 +14,10 @@ typedef struct {
     uint16_t curr_min_voltage;
     uint8_t min_volt_cell;
 
-    uint16_t packCurrent;
-    uint16_t packVoltage;
-    uint16_t packPower;
-    uint16_t packCharge;
-    uint16_t packEnergy;
+    uint16_t curr_max_temp;
+    uint8_t max_temp_cell;
+    uint16_t curr_min_temp;
+    uint8_t min_temp_cell;
 
     // 2949 readings
     uint16_t max_power;
@@ -28,10 +27,11 @@ typedef struct {
     uint16_t max_curr_2949;
     uint16_t min_curr_2949;
 
-    uint16_t curr_max_temp;
-    uint8_t max_temp_cell;
-    uint16_t curr_min_temp;
-    uint8_t min_temp_cell;
+    uint16_t packCurrent;
+    uint16_t packVoltage;
+    uint16_t packPower;
+    uint16_t packCharge;
+    uint16_t packEnergy;
 
     // additional readings
     bool invalid_data;
@@ -43,7 +43,7 @@ typedef struct {
     bool is_fault;
     uint8_t fault_board_num;
 
-}BMS_critical_info_t;
+} BMS_critical_info_t;
 
 void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cfg);
 bool FAULT_check(BMSConfigStructTypedef cfg, BMS_critical_info_t bms_struct, uint8_t bmsData[144][6], uint8_t bmsStatus[6]);
