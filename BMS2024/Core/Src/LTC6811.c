@@ -1,102 +1,22 @@
-/*
-LTC6811 Command Functions
-		Matt Vlasaty
-		March 29th, 2019
-
-		Refactored Jan 31, 2024
-		Aditya Nikumbh
-
-		General Functions
-				sendBroadcastCommand: void sendBroadcastCommand(CommandCodeTypedef command);
-						- sends specified write-only command to every LTC in the chain (ex: ADCV)
-						- CommandCodeTypedef enum contains every command code used
-				sendAddressCommand: void sendAddressCommand(CommandCodeTypedef command, uint8_t address);
-						- sends specified write-only command to LTC with specified address
-				readRegister: bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data);
-						- reads register specified in command from specified board
-						- ex: ReadCellVoltageRegisterGroup1to3, ReadAuxiliaryGroupA, ReadConfigurationRegisterGroup
-						- returns true if received PEC matches calculated PEC
-
-		Configuration Functions
-				writeConfigAll: void writeConfigAll(BMSConfigStructTypedef cfg);
-						- writes configuration data from BMSconfig struct into LTC configuration register
-						- BMSconfig struct includes ADCMode, UV, OV, and discharge enable for each cell
-						- BMSconfig struct also contains number of ICs and array of addresses used
-				writeConfigAddress: void writeConfigAddress(BMSConfigStructTypedef cfg, uint8_t address);
-						- this is only used for cellDischarge command
-						- writes configuration data to LTC with specified address
-				readConfig: bool readConfig(uint8_t address, uint8_t cfg[6]);
-						- uses general readRegister function to check current state of LTC configuration register
-						- this is mostly for testing purposes
-						- returns true if received PEC matches calculated PEC (same as readRegister)
-
-		Cell Voltage Functions
-				readCellVoltage: bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]);
-						- sends ADCV command that begins conversion for every cell to specified LTC
-						- reads all cell voltage registers using general readRegister function
-						- used cell inputs (1, 2, 3, 4, 7, 8, 9, 10) must be chosen from cellVoltage[12] later
-						- returns true if received PEC matches calculated PEC for every register read
-				readAllCellVoltages: bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[96][6]);
-						- stores cell number, cell voltage, and data valid bit into bmsData
-						- returns true if no PEC for any register read for any board
-		Cell Temperature Functions
-				readCellTemp: bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool tempFault[4]);
-						- initiates ADC conversion for GPIO inputs connected to temperature sensors
-						- reads auxiliary register groups using general readRegister function
-						- converts measured voltage into temperature based on temperature sensor response
-						- checks for disconnected temperature sensor and overtemperature faults for each LTC and stores results
-				readAllCellTemps: bool readAllCellTemps(uint8_t numBoards, uint16_t cellTemp[numBoards][4], bool dcFault[numBoards][4], bool tempFault[numBoards][4]);
-						- not tested
-						- using order of ICs in BMSconfig, stores cell temperature for every cell on every board into 2D array
-						- returns false if any readCellTemp returns false
-
-		Cell Connection Functions
-				checkCellConnection: void checkCellConnection(uint16_t cellVoltage[12], bool cellConnection[12]);
-						- needs previously obtained cell voltage measurements
-						- initiates ADOW command with PUP = 0 to source 100uA while measuring cell voltage
-						- reads cell voltages with readCellVoltage function
-						- compares previously measured values to open wire check values
-						- if there is a significant drop in voltage (should be configurable), cell is disconnected
-						- stores 1 into cellConnection if cell is connected
-						- stores 0 into cellConnection if cell is disconnected
-				checkAllCellConnections:
-
-		PEC Functions
-				initPECTable: void initPECTable(void);
-						- taken from LTC6811 datasheet
-						- generates PEC look-up table
-						- should be called on start-up
-				calculatePEC: uint16_t calculatePEC(uint8_t len, uint8_t *data);
-						- taken from LTC6811 datasheet
-						- used when sending command to calculate necessary PEC bytes to follow command bytes
-						- used when receiving data to compare received PEC with the PEC that should have been received based on data
-						- returns uint16_t PEC value
-
-		TODO:
-				- checkCellConnection return value needs to disregard unused cell inputs
-				- resolve issue with writeConfig not changing every bit in the first register group
-				- test functions used to read from every board (readAllCellVoltages should be [12][8])
-				- minor changes (using more user-defined constants, changing return values)
-
-		NOTES:
-				- writeConfig is called every loop for every LTC because dischargeCells is called every loop for every LTC
-				- always take measurements, only send when not charging? (CAN messages for charging?)
-				- every 'readAll' function starts with address = 0 and increases sequentially
-
-				- in temp read, faults are determined but not transferred
-				- temperature conversion works, but error is +/- 1 degree
+/* LTC6811 Drivers
+ *	Matt Vlasaty: March 29th, 2019
+ *	Aditya Nikumbh: Refactored Jan 31, 2024
+ * 	David Lacayo: February, 2024
+ *
+ *	TODO:
+ *		- checkCellConnection return value needs to disregard unused cell inputs
+ *		- resolve issue with writeConfig not changing every bit in the first register group
+ *		- test functions used to read from every board (readAllCellVoltages should be [12][8])
+ *		- minor changes (using more user-defined constants, changing return values)
 */
-
-#define BOARD_START 0
-#define BOARD_SIZE 12
-#define BOARD_END BOARD_SIZE
 
 #include "LTC6811.h"
 
 uint16_t pec15Table[256];	   // Packet Error Code
-uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor
+uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor -> In datasheet :)
 
-// Initialises Packet Error Code LUT
+//! \brief Initializes Packet Error Code LUT by generating PEC look up table -> call on startup
+//! \returns none
 void initPECTable(void) {
 	uint16_t remainder;
 
@@ -112,7 +32,27 @@ void initPECTable(void) {
 	}
 }
 
-// GOOD
+//! \brief This method is used when sending a command to calculate the necessary PEC bytes to follow command bytes. 
+//		Should be used when receiving data to compare receieved PEC with expected PEC value
+//! \param len is the number of bytes that we will be stepping through in our data 
+//! \param data is the data that we will be using to calculate the expected PEC
+//! \returns the expected PEC value
+uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by value now that we are not using malloc (ensure no edit)
+	uint16_t remainder, address;
+	remainder = 16;	 // PEC seed
+
+	for (int i = 0; i < len; i++) {
+		address = ((remainder >> 7) ^ data[i]) & 0xFF;	// calculate PEC table address
+		remainder = (remainder << 8) ^ pec15Table[address];
+	}
+
+	return (remainder * 2);	 // The CRC15 has a 0 in the LSB so the final value must be multiplied by 2
+}
+
+//! \brief this method is used for cellDischarge in order to write configuration datra to the LTC with specified address
+//! \param cfg is the configuration struct for BMS constants 
+//! \param address is the address used to pass into our config file 
+//! \returns none 
 void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	uint8_t config[6];
 	uint8_t cmd[12];
@@ -146,7 +86,10 @@ void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	readConfig(address, dummy);
 }
 
-// GOOD
+//! \brief This function is called every loop to accommodate dischargeCells method 
+//		Specifically writes configuration data (UV, OV, ADCMode, etc) to BMSConfig struct
+//! \param cfg is the configuration files for the constants in the BMS system
+//! \returns none
 void writeConfigAll(BMSConfigStructTypedef *cfg) {
 	wakeup_idle();
 
@@ -155,6 +98,11 @@ void writeConfigAll(BMSConfigStructTypedef *cfg) {
 	}
 }
 
+//! \brief This function sends an ADCV command that begins conversion for every cell to specified LTC. 
+//		This results in the function readings all cell voltage registers using the readRegister function. 
+//! \param address is the address of the board that will be read 
+//! \param cellVoltage is the array that will store the voltages of all the cells on the board being read
+//! \returns true if PEC matches expected PEC value, else false 
 bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool PEC_check = false;
 	bool dataValid = true;
@@ -177,6 +125,11 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	return dataValid;
 }
 
+//! \brief This function reads all cell voltages by essentially parsing each board and reading the individual cell voltages. These are then 
+//		stored in the bmsData array, along with the cell number that is associated with the reading. 
+//! \param cfg is the BMS configuration struct with constants 
+//! \param bmsData is the 2D array that stores all cell data for voltages, temperatures, faults, and cell number 
+//! \returns true if no PEC for any register read for any board 
 bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t boardVoltage[12];
 	bool PEC_check[12];
@@ -190,27 +143,36 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 
 	wakeup_idle();
 
-	for (uint8_t board = BOARD_START; board < BOARD_END; board++) {
+	for (uint8_t board = 0; board < NUM_BOARDS; board++) {
 		// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
 		PEC_check[board] = readCellVoltage(board, boardVoltage);
 		dataValid &= PEC_check[board];
 
 		// store cell number and valid data bit in bmsData
-		for (uint8_t cell = BOARD_END; cell < BOARD_END; cell++) {
-			bmsData[(board * BOARD_SIZE) + cell][0] = (uint8_t)((board * BOARD_SIZE) + cell + 1);  // cell number
-			bmsData[(board * BOARD_SIZE) + cell][1] = 0;										   // clear status byte
+		for (uint8_t cell = 0; cell < NUM_BOARDS; cell++) {
+			bmsData[(board * NUM_BOARDS) + cell][0] = (uint8_t)((board * NUM_BOARDS) + cell + 1);  // cell number
+			bmsData[(board * NUM_BOARDS) + cell][1] = 0;										   // clear status byte
 
 			if (PEC_check[board])
-				bmsData[(board * BOARD_SIZE) + cell][1] |= 0b00000010;	// set valid data bit
+				bmsData[(board * NUM_BOARDS) + cell][1] |= 0b00000010;	// set valid data bit
 
-			bmsData[(board * BOARD_SIZE) + cell][2] = (uint8_t)((boardVoltage[cell] >> 8) & 0xFF);
-			bmsData[(board * BOARD_SIZE) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
+			bmsData[(board * NUM_BOARDS) + cell][2] = (uint8_t)((boardVoltage[cell] >> 8) & 0xFF);
+			bmsData[(board * NUM_BOARDS) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
 		}
 	}
 
 	return dataValid;  // return true if no PEC errors for any board
 }
 
+//! \brief This function initiates ADC conversion for GPIO inputs connected to temperature sensors. 
+//		Reads auxiliary register groups using readRegister function. Then, converts measured voltage into temperature 
+//			based on temperature sensor response. Also checks for disconnected temperature sensor and OT faults. 
+//				NOTE: We only read 4 temps per board, and they are the 4 highest temps on each board.
+//! \param address is the address of the board being read
+//! \param cellTemp is the array that will hold the cell temps read during readRegister
+//! \param dcFault is the array that stores temperature sensor ceonnection for all cells read 
+//! \param tempFault stores OT fault info for each cell read 
+//! \returns true if PEC value read matches expected PEC value calculated. Otherwise, false. 
 bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool tempFault[4]) {
 	bool PEC_check = false;
 	bool dataValid = true;
@@ -242,6 +204,10 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 	return (dataValid);
 }
 
+//! \brief This function reads cell temps from all of our board by calling readCellTemp for each board. NOTE : This is not proven to work properly yet.
+//! \param cfg is the configuration struct for BMS with all of the constants used 
+//! \param bmsData is the 2D array where we track the data of each cell in our pack 
+//! \returns true if PEC value received matches expected PEC value. Otherwise, false. -> i.e., returns false if any readCellTemp return values are false. 
 bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t boardTemp[4];
 	bool boardDCFault[4];
@@ -259,9 +225,7 @@ bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	wakeup_idle();
 	HAL_Delay(2);
 
-	// set [BOARD_START,BOARD_END) to [4,5) if you want to test solely with testing board
-	// you'll want to see the data starting from BMS_DATA[48][];
-	for (uint8_t board = BOARD_START; board < BOARD_END; board++) {
+	for (uint8_t board = 0; board < NUM_BOARDS; board++) {
 		// read temperature, check for OT and temp DC
 		PEC_check[board] = readCellTemp(board, boardTemp, boardDCFault, boardTempFault);
 		dataValid &= PEC_check[board];
@@ -285,6 +249,11 @@ bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	return dataValid;
 }
 
+//! \brief This method uses general readRegister function to check current state of LTC configuration reg. 
+//		Mostly used for testing purposes
+//! \param address is the address passed into the readRegister function
+//! \param cfg is part of the configuration that will be passed to check the current state of the LTC
+//! \returns true if the received PEC from readRegister mathes the calculated PEC 
 bool readConfig(uint8_t address, uint8_t cfg[8]) {
 	uint16_t config[4];
 	bool dataValid = false;
@@ -305,23 +274,13 @@ bool readConfig(uint8_t address, uint8_t cfg[8]) {
 	return dataValid;
 }
 
-/*bool checkCellConnection(uint8_t address, uint16_t cellVoltage[12], bool cellConnection[12]) {
-
-
-
-		for (uint8_t i = 0; i < 12; i++) {
-				// if voltage fell by > 100mV
-				if ((cellVoltage[i] - ADOWvoltage[i]) > 1000) {
-						cellConnection[i] = 0; // cell is disconnected
-						disconnect = true;
-				}
-				else {
-						cellConnection[i] = 1;
-				}
-		}
-		return disconnect;
-}*/
-
+//! \brief This function checks the cell connections of each cell in the BMS data array.
+//		Currently not used, as we have not been able to get it working, but the whole idea is that 
+//			this function compares previously measured values to open wire check values, and if 
+//				there is a significant drop in voltage, cell is allegedly disconnected. 
+//! \param cfg is the BMS configuration struct with constants 
+//! \param bmsData is a 2D array of 144 cells x 6 readings that stores our cell data throughout the system
+//! \returns true is the cell is connnected properly, and false if the cell is "disconnected"
 bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t ADOWvoltage[cfg.numOfCellInputs];
 	uint16_t cellVoltage;
@@ -342,7 +301,7 @@ bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]
 
 	wakeup_idle();
 
-	for (uint8_t board = BOARD_START; board < cfg.numOfICs; board++) {
+	for (uint8_t board = 0; board < cfg.numOfICs; board++) {
 		PEC_check[board] = readCellVoltage(cfg.address[board], ADOWvoltage);
 		dataValid &= PEC_check[board];
 
@@ -366,6 +325,10 @@ bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]
 	return dataValid;
 }
 
+//! \brief This function writes the configuration struct of cells that are currently being discharged. This is to track which cells are //		being discharged while running our balancing algorithm. 
+//! \param cfg is the configuration struct that stores all the constants in our BMS algorithm 
+//! \param cellDischarge is a 2D array of cells that tracks which cells are being discharged or not : 1 = discharging, 0 = not discharging 
+//! returns 0 always -> not sure why we need a return value on this 
 bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]) {
 	wakeup_idle();
 
@@ -377,32 +340,13 @@ bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]
 		writeConfigAddress(cfg, cfg->address[i]);
 	}
 
-	for (int i = 0; i < 12; i++)
+	for (uint8_t i = 0; i < 12; i++)
 		cfg->DischargeCell[i] = 0;
 
 	return 0;
 }
 
-/*bool dischargeCell(BMSConfigStructTypedef config, bool cellDischarge[8]) {
-
-		BMSConfigStructTypedef *cfg;
-		cfg = &config;
-
-		cfg->DischargeCell1 = cellDischarge[0];
-		cfg->DischargeCell2 = cellDischarge[1];
-		cfg->DischargeCell3 = cellDischarge[2];
-		cfg->DischargeCell4 = cellDischarge[3];
-		cfg->DischargeCell7 = cellDischarge[4];
-		cfg->DischargeCell8 = cellDischarge[5];
-		cfg->DischargeCell9 = cellDischarge[6];
-		cfg->DischargeCell10 = cellDischarge[7];
-
-		writeConfig(config, 0, 1);
-
-		return 0;
-
-}*/
-
+//! \brief This function is used to wakeup the LTC chip that we want to use to get readings from 
 void wakeup_idle() {
 	uint32_t delay = 15;
 //	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
@@ -411,6 +355,11 @@ void wakeup_idle() {
 //	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
+//! \brief Reads register specified by command from specified board address 
+//! \param command is the command that we will send to the board
+//! \param address is the specific board that will get the command
+//! \param data is where the data read from the specific board will be StartOpenWireConversionPulldown
+//! \returns true if the data is valid, otherwise false (i.e., received PEC matches expected PEC value)
 bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data) {  // changed to take array by reference now that malloc is removed
 	uint8_t cmd[12];
 	uint8_t rx_data[12];
@@ -501,6 +450,9 @@ bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data) {
 	return (dataValid);
 }
 
+//! \brief Sends specified write only command to every LTC in the chain (ex: ADCV)
+//! \param command contains every command code used 
+//! \returns none 
 void sendBroadcastCommand(CommandCodeTypedef command) {
 	uint8_t cmd[4];
 	uint16_t PEC_return;
@@ -516,6 +468,10 @@ void sendBroadcastCommand(CommandCodeTypedef command) {
 	SPIWrite(cmd, 4);
 }
 
+//! \brief Sends specified write-only command to LTC with the specified address 
+//! \param command is the command that will be sent to the LTC 
+//! \param address is the specified address of the LTC that will receive the command
+//! \returns none 
 void sendAddressCommand(CommandCodeTypedef command, uint8_t address) {
 	uint8_t cmd[4];
 	uint16_t PEC_return;
@@ -533,16 +489,4 @@ void sendAddressCommand(CommandCodeTypedef command, uint8_t address) {
 	cmd[3] = PEC_return & 0xFF;
 
 	SPIWrite(cmd, 4);
-}
-
-uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by value now that we are not using malloc (ensure no edit)
-	uint16_t remainder, address;
-	remainder = 16;	 // PEC seed
-
-	for (int i = 0; i < len; i++) {
-		address = ((remainder >> 7) ^ data[i]) & 0xFF;	// calculate PEC table address
-		remainder = (remainder << 8) ^ pec15Table[address];
-	}
-
-	return (remainder * 2);	 // The CRC15 has a 0 in the LSB so the final value must be multiplied by 2
 }
