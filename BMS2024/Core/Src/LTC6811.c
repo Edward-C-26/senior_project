@@ -20,9 +20,9 @@ uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor -> In datasheet
 void initPECTable(void) {
 	uint16_t remainder;
 
-	for (int i = 0; i < 256; i++) {
+	for (uint8_t i = 0; i < 256; i++) {
 		remainder = i << 7;
-		for (int bit = 0; bit < 8; bit++) {
+		for (uint8_t bit = 0; bit < 8; bit++) {
 			remainder <<= 1;
 
 			if (remainder & 0x4000)
@@ -41,7 +41,7 @@ uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by 
 	uint16_t remainder, address;
 	remainder = 16;	 // PEC seed
 
-	for (int i = 0; i < len; i++) {
+	for (uint8_t i = 0; i < len; i++) {
 		address = ((remainder >> 7) ^ data[i]) & 0xFF;	// calculate PEC table address
 		remainder = (remainder << 8) ^ pec15Table[address];
 	}

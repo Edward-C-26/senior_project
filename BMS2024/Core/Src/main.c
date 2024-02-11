@@ -26,6 +26,7 @@
 #include "Fault.h"
 #include "LTC2949.h"
 #include "LTC6811.h"
+#include "PackCalculations.h"
 #include "SPI.h"
 /* USER CODE END Includes */
 
