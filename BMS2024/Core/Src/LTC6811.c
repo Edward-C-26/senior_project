@@ -20,12 +20,12 @@ uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor -> In datasheet
 void initPECTable(void) {
 	uint16_t remainder;
 
-	for (uint8_t i = 0; i < 256; i++) {
+	for (uint16_t i = 0; i < 256; i++) {
 		remainder = i << 7;
 		for (uint8_t bit = 0; bit < 8; bit++) {
 			remainder <<= 1;
 
-			if (remainder & 0x4000)
+			if (remainder & 0x8000)
 				remainder ^= CRC15_POLY;
 		}
 		pec15Table[i] = remainder & 0xFFFF;
@@ -349,10 +349,10 @@ bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]
 //! \brief This function is used to wakeup the LTC chip that we want to use to get readings from 
 void wakeup_idle() {
 	uint32_t delay = 15;
-//	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 	while (delay--)
 		;
-//	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
 //! \brief Reads register specified by command from specified board address 
