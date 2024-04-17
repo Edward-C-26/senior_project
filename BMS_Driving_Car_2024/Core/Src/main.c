@@ -64,7 +64,7 @@
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
 
-SPI_HandleTypeDef hspi1;	// LTC SPI
+SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
@@ -72,6 +72,7 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
+SPI_HandleTypeDef *ltc_spi = &hspi1;
 
 CAN_TxHeaderTypeDef TxHeader;
 CAN_RxHeaderTypeDef RxHeader;
@@ -132,52 +133,55 @@ void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool B
 int main(void)
 {
 
-    /* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-    /* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-    /* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-    HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-    /* USER CODE BEGIN Init */
-    BMSConfigStructTypedef BMSConfig;
-    BMS_critical_info_t BMSCriticalInfo;
+  /* USER CODE BEGIN Init */
+  BMSConfigStructTypedef BMSConfig;
+  BMS_critical_info_t BMSCriticalInfo;
 
-    /* USER CODE END Init */
+  /* USER CODE END Init */
 
-    /* Configure the system clock */
-    SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-    /* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-    /* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-    /* Initialize all configured peripherals */
-    MX_GPIO_Init();
-    MX_CAN1_Init();
-    MX_SPI1_Init();
-    MX_SPI2_Init();
-    MX_SPI3_Init();
-    MX_TIM2_Init();
-    MX_TIM3_Init();
-    /* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_CAN1_Init();
+  MX_SPI1_Init();
+  MX_SPI2_Init();
+  MX_SPI3_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
+  /* USER CODE BEGIN 2 */
     initPECTable();
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo, &BMSConfig);
 
-    /* USER CODE END 2 */
+    HAL_CAN_Start(&hcan1);
 
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
     while (1)
     {
-        /* USER CODE END WHILE */
-        /* USER CODE BEGIN 3 */
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
         david++;
 
-        if (TEST_FAN) {
+        if (TEST_FAN == 1) {
             HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
             TIM2->CCR2 = 0;
             HAL_Delay(1000);
@@ -192,7 +196,7 @@ int main(void)
         }
 
         writeConfigAll(&BMSConfig);
-        // HAL_Delay(100);	 // TODO: Why is this here?
+        HAL_Delay(100);	 // TODO: Why is this here?
 
         /** FUNCTION CALL OVERVIEW
          * First: Call read2949

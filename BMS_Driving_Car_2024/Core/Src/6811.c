@@ -65,8 +65,8 @@ void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	config[1] = (uint8_t)(cfg->UndervoltageComparisonVoltage & 0xFF);
 	config[2] = (uint8_t)(((cfg->OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg->UndervoltageComparisonVoltage >> 8) & 0x0F));
 	config[3] = (uint8_t)((cfg->OvervoltageComparisonVoltage >> 4) & 0xFF);
-	config[4] = (uint8_t)((cfg->DischargeCell[7] << 7) | (cfg->DischargeCell[6] << 6) | (cfg->DischargeCell[5] << 5) | (cfg->DischargeCell[4] << 4) | (cfg->DischargeCell[3] << 3) | (cfg->DischargeCell[2] << 2) | (cfg->DischargeCell[1] << 1) | (cfg->DischargeCell[0]));
-	config[5] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[11] << 3) | (cfg->DischargeCell[10] << 2) | (cfg->DischargeCell[9] << 1) | (cfg->DischargeCell[8]));
+	config[4] = (uint8_t)((cfg->DischargeCell[8] << 7) | (cfg->DischargeCell[7] << 6) | (cfg->DischargeCell[6] << 5) | (cfg->DischargeCell[5] << 4) | (cfg->DischargeCell[4] << 3) | (cfg->DischargeCell[3] << 2) | (cfg->DischargeCell[2] << 1) | (cfg->DischargeCell[1]));
+	config[5] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[12] << 3) | (cfg->DischargeCell[11] << 2) | (cfg->DischargeCell[10] << 1) | (cfg->DischargeCell[9]));
 
 	cmd[0] = (uint8_t)((0x80 | ((address << 3) & 0x78) | ((WriteConfigurationRegisterGroup >> 8) & 0x07)));
 	cmd[1] = (uint8_t)(WriteConfigurationRegisterGroup & 0xFF);
@@ -110,6 +110,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool dataValid = true;
 	uint16_t voltage[12];
 
+
 	PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 	dataValid = dataValid & PEC_check;
 
@@ -136,6 +137,7 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t boardVoltage[12];
 	bool PEC_check[12];
 	bool dataValid = true;
+	uint8_t flag = 0;
 
 	wakeup_idle();
 
@@ -160,7 +162,10 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 
 			bmsData[(board * NUM_BOARDS) + cell][2] = (uint8_t)((boardVoltage[cell] >> 8) & 0xFF);
 			bmsData[(board * NUM_BOARDS) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
-//			uint16_t test = boardVoltage[cell];
+		}
+
+		if (board == 11) {
+			flag++;
 		}
 	}
 
