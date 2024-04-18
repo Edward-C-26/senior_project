@@ -38,14 +38,14 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CELLVAL_ID 0x400
-#define BMSSTAT_ID 0x401
-#define BMSVINF_ID 0x402
-#define BMSTINF_ID 0x403
-#define PACKSTAT_ID 0x404	
+#define CELLVAL_ID 0x780
+#define BMSSTAT_ID 0x781
+#define BMSVINF_ID 0x782
+#define BMSTINF_ID 0x783
+#define PACKSTAT_ID 0x180	
 #define CHARGER_OUT_ID 0x405
-#define CELL_VOLTAGE_FAULTS 0x406
-#define CELL_TEMP_FAULTS 0x407
+#define CELL_VOLTAGE_FAULTS 0x785
+#define CELL_TEMP_FAULTS 0x786
 
 #define CHARGER_IN_ID 0x1806E5F4
 #define CHARGER_INFO_ID 0x700
@@ -117,7 +117,8 @@ void CELLVAL_message(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]);
 void BMSSTAT_message(BMSConfigStructTypedef cfg, uint8_t bmsStatus[6]);
 void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms);
 void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool BMS_FAULT);
-// void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]);
+// void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]); // old method 
+void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms); // draft :D
 
 /* USER CODE END PFP */
 
@@ -133,47 +134,47 @@ void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool B
 int main(void)
 {
 
-  /* USER CODE BEGIN 1 */
+    /* USER CODE BEGIN 1 */
 
-  /* USER CODE END 1 */
+    /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
-  /* USER CODE BEGIN Init */
-  BMSConfigStructTypedef BMSConfig;
-  BMS_critical_info_t BMSCriticalInfo;
+    /* USER CODE BEGIN Init */
+    BMSConfigStructTypedef BMSConfig;
+    BMS_critical_info_t BMSCriticalInfo;
 
-  /* USER CODE END Init */
+    /* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    /* Configure the system clock */
+    SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+    /* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+    /* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_CAN1_Init();
-  MX_SPI1_Init();
-  MX_SPI2_Init();
-  MX_SPI3_Init();
-  MX_TIM2_Init();
-  MX_TIM3_Init();
-  /* USER CODE BEGIN 2 */
+    /* Initialize all configured peripherals */
+    MX_GPIO_Init();
+    MX_CAN1_Init();
+    MX_SPI1_Init();
+    MX_SPI2_Init();
+    MX_SPI3_Init();
+    MX_TIM2_Init();
+    MX_TIM3_Init();
+    /* USER CODE BEGIN 2 */
     initPECTable();
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo, &BMSConfig);
 
     HAL_CAN_Start(&hcan1);
 
-  /* USER CODE END 2 */
+    /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
     while (1)
     {
     /* USER CODE END WHILE */
@@ -219,7 +220,6 @@ int main(void)
         checkAllCellConnections(BMSConfig, BMS_DATA);
         BMSConfig.UV_threshold = (CHARGE_EN == 0) ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
 
-
         /* DO THIS WHEN TESTING BMS FAULTS*/    //*NOTE* : need to figure out which pin is the BMS fault pin
         // bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
         // if (BMS_FAULT == false) {
@@ -230,7 +230,7 @@ int main(void)
         // 	if (global_error_count == 20) {
         // 		global_error_count = 0;
         // 		HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_SET);
-        // 	}
+        //     }
         // }
 
         // Finally, balance if charging and toggled 
@@ -255,13 +255,13 @@ int main(void)
         }
 
         // Send remaining CAN messages
-        // PACKSTAT_message(BMSConfig, BMS_DATA);
+        PACKSTAT_message(BMSConfig, BMSCriticalInfo);
         BMSSTAT_message(BMSConfig, BMS_STATUS);
         CELLVAL_message(BMSConfig, BMS_DATA);
-        // PACKSTAT_message(BMSConfig, BMS_DATA);
+        PACKSTAT_message(BMSConfig, BMSCriticalInfo);
     }
 
-  /* USER CODE END 3 */
+    /* USER CODE END 3 */
 }
 
 /**
@@ -743,6 +743,25 @@ void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool B
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
         // HAL_GPIO_TogglePin(DEBUG_GPIO_Port, DEBUG_Pin);	// which PIN is this? 
     }
+}
+
+void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
+    TxHeader.StdId = PACKSTAT_ID;
+    TxHeader.DLC = 6;
+    uint8_t PACKSTAT_DATA[6];
+
+    uint16_t pack_voltage = bms.packVoltage;
+    uint16_t pack_current = bms.packCurrent;
+    uint16_t pack_power = bms.packPower;
+
+    PACKSTAT_DATA[0] = (uint8_t)((pack_voltage >> 8) & 0xFF);
+    PACKSTAT_DATA[1] = (uint8_t)(pack_voltage & 0xFF);
+    PACKSTAT_DATA[2] = (uint8_t)((pack_current >> 8) & 0xFF);
+    PACKSTAT_DATA[3] = (uint8_t)(pack_current & 0xFF);
+    PACKSTAT_DATA[4] = (uint8_t)((pack_power >> 8) & 0xFF);
+    PACKSTAT_DATA[5] = (uint8_t)(pack_power & 0xFF);
+
+    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, PACKSTAT_DATA, &TxMailbox);
 }
 
 // This will not work if we aren't using ADC

@@ -1,3 +1,6 @@
+/**
+ * Last Edited Spring 2024 : David Lacayo
+*/
 #include "PackCalculations.h"
 
 //! \brief This method calculates the maximum and minimum cell voltages in the pack, and sets those values w/ the associated
@@ -12,8 +15,10 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
     uint16_t minCellVoltage = cfg.OV_threshold - 1;
     uint8_t minCell;
     uint16_t cellVoltage;
+    uint16_t totalPackVoltage;
 
     int hi = 0;
+    totalPackVoltage = 0;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
     	if(cell > 131) {
@@ -22,6 +27,9 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
         cellVoltage = (uint16_t)(bmsData[cell][2]);
         cellVoltage <<= 8;
         cellVoltage += (uint16_t)(bmsData[cell][3]);
+
+        // Cummulative pack voltage counter
+        totalPackVoltage += cellVoltage;
 
         // Check if cell readings is a max voltage or min voltage
         if(cellVoltage > maxCellVoltage && cellVoltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {
@@ -40,6 +48,7 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
     bms.curr_min_voltage = minCellVoltage;
     bms.max_volt_cell = maxCell;
     bms.min_volt_cell = minCell;
+    bms.packVoltage = totalPackVoltage;
 
 }
 

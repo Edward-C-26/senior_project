@@ -1,5 +1,8 @@
-#include "SPI.h"
+/**
+ * Last Edited Spring 2024 : David Lacayo
+*/
 
+#include "SPI.h"
 
 bool SPIWrite(uint8_t *writeBuffer, uint8_t totalBytes) {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);	 // For debug only

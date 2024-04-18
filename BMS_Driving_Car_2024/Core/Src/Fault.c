@@ -1,3 +1,7 @@
+/**
+ * Last Edited : David Lacayo
+*/
+
 #include "Fault.h"
 
 //! \brief This method initializes the BMS info struct, which contains critical info regarding maxs and mins for 

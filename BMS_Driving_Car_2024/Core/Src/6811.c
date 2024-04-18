@@ -1,7 +1,7 @@
 /* LTC6811 Drivers
  *	Matt Vlasaty: March 29th, 2019
  *	Aditya Nikumbh: Refactored Jan 31, 2024
- * 	David Lacayo: February, 2024
+ * 	David Lacayo: April, 2024
  *
  *	TODO:
  *		- checkCellConnection return value needs to disregard unused cell inputs
