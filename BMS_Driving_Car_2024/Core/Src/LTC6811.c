@@ -140,12 +140,14 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint8_t flag = 0;
 
 	wakeup_idle();
+	HAL_Delay(2);
 
 	sendBroadcastCommand(ClearRegisters);
 	sendBroadcastCommand(StartCellVoltageADCConversionAll);
 	HAL_Delay(20);
 
 	wakeup_idle();
+	HAL_Delay(2);
 
 	for (uint8_t board = 0; board < NUM_BOARDS; board++) {
 		// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
@@ -164,7 +166,7 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 			bmsData[(board * NUM_BOARDS) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
 		}
 
-		if (board == 11) {
+		if (board == 2 || board == 3) {
 			flag++;
 		}
 	}
