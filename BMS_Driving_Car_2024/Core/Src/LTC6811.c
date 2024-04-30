@@ -134,6 +134,8 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 //! \param bmsData is the 2D array that stores all cell data for voltages, temperatures, faults, and cell number 
 //! \returns true if no PEC for any register read for any board 
 bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
+	// DEAR WHOEVER READS/ RUNS THIS CODE
+	// DO NOT BREAKPOINT HERE UNLESS YOU WANT TO GOOF TIMING UP
 	uint16_t boardVoltage[12];
 	bool PEC_check[12];
 	bool dataValid = true;
@@ -150,6 +152,7 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	HAL_Delay(2);
 
 	for (uint8_t board = 0; board < NUM_BOARDS; board++) {
+
 		// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
 		PEC_check[board] = readCellVoltage(board, boardVoltage);
 		dataValid &= PEC_check[board];
@@ -164,10 +167,6 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 
 			bmsData[(board * NUM_BOARDS) + cell][2] = (uint8_t)((boardVoltage[cell] >> 8) & 0xFF);
 			bmsData[(board * NUM_BOARDS) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
-		}
-
-		if (board == 2 || board == 3) {
-			flag++;
 		}
 	}
 

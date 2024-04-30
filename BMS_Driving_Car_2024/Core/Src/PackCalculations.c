@@ -60,9 +60,9 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
 //! \returns none 
 void setCriticalTemps(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]) {
     uint16_t maxCellTemp = 0;
-    uint8_t maxCell;
+    uint8_t maxCell = 180;
     uint16_t minCellTemp = cfg.OT_threshold - 1;
-    uint8_t minCell;
+    uint8_t minCell = 180;
     uint16_t cellTemp;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
@@ -80,6 +80,7 @@ void setCriticalTemps(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8
 			maxCellTemp = cellTemp;
 			maxCell = cell + 1;
 		}
+
     }
 
     // Assign values to the BMS critical info struct 
