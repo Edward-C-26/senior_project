@@ -21,7 +21,7 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
     totalPackVoltage = 0;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-    	if(cell > 23 && cell < 48) {
+    	if((cell >= 24 && cell <= 47) || (cell >= 72 && cell <= 95)) {
     		hi++;
     	}
         cellVoltage = (uint16_t)(bmsData[cell][2]);
