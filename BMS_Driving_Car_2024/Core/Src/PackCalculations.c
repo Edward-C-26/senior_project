@@ -21,15 +21,15 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
     totalPackVoltage = 0;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-    	if((cell >= 24 && cell <= 47) || (cell >= 72 && cell <= 95)) {
-    		hi++;
-    	}
         cellVoltage = (uint16_t)(bmsData[cell][2]);
         cellVoltage <<= 8;
         cellVoltage += (uint16_t)(bmsData[cell][3]);
 
         // Cummulative pack voltage counter
         totalPackVoltage += cellVoltage;
+        if (cellVoltage != 65535) {
+        	hi++;
+        }
 
         // Check if cell readings is a max voltage or min voltage
         if(cellVoltage > maxCellVoltage && cellVoltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {

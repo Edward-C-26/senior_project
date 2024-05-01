@@ -146,7 +146,7 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 
 	sendBroadcastCommand(ClearRegisters);
 	sendBroadcastCommand(StartCellVoltageADCConversionAll);
-	HAL_Delay(20);
+	HAL_Delay(10);
 
 	wakeup_idle();
 	HAL_Delay(2);
