@@ -357,7 +357,7 @@ bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]
 
 //! \brief This function is used to wakeup the LTC chip that we want to use to get readings from 
 void wakeup_idle() {
-	uint32_t delay = 15;
+	uint32_t delay = 1;
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 	while (delay--)
 		;

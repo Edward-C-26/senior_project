@@ -197,7 +197,7 @@ int main(void)
         }
 
         writeConfigAll(&BMSConfig);
-        HAL_Delay(100);	 // TODO: Why is this here?
+        HAL_Delay(50);	 // TODO: Why is this here?
 
         /** FUNCTION CALL OVERVIEW
          * First: Call read2949

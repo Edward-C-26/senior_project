@@ -80,7 +80,7 @@ void loadConfig(BMSConfigStructTypedef* cfg) {
 	// 0: 422Hz, 1: 27kHz, 2: 7kHz, 3: 26Hz, 4: 1kHz, 5: 14kHz, 6: 3kHz, 7: 2kHz
 	cfg->ADCConversionRate = 0;
 
-	cfg->ADCModeOption = 1;
+	cfg->ADCModeOption = 1; // How TF is this calculated?????
 
 	// chip and code should share OV and UV thresholds
 

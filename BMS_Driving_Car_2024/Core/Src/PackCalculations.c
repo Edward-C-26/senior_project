@@ -17,7 +17,8 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
     uint16_t cellVoltage;
     uint16_t totalPackVoltage;
 
-    int hi = 0;
+    int workingCells = 0;
+    int failedCells = 0;
     totalPackVoltage = 0;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
@@ -26,10 +27,13 @@ void setCriticalVoltages(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, ui
         cellVoltage += (uint16_t)(bmsData[cell][3]);
 
         // Cummulative pack voltage counter
-        totalPackVoltage += cellVoltage;
-        if (cellVoltage != 65535) {
-        	hi++;
+        totalPackVoltage += cellVoltage/100;
+        if (cellVoltage > 60000) {
+        	failedCells++;
         }
+        if (cellVoltage != 65535) {
+        	workingCells++;
+		}
 
         // Check if cell readings is a max voltage or min voltage
         if(cellVoltage > maxCellVoltage && cellVoltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {
@@ -65,11 +69,20 @@ void setCriticalTemps(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8
     uint8_t minCell = 180;
     uint16_t cellTemp;
 
+    int validTemps = 0;
+    int invalidTemps = 0;
+
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
         cellTemp = (uint16_t)(bmsData[cell][4]);
 		cellTemp <<= 8;
 		cellTemp += (uint16_t)(bmsData[cell][5]);
 
+		if (cellTemp == 0) {
+			invalidTemps++;
+		}
+		else {
+			validTemps++;
+		}
         // Check for cell Temps being max or min 
         if (cellTemp < minCellTemp && cellTemp > 5000) {
 			minCellTemp = cellTemp;
