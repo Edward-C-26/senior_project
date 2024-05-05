@@ -193,22 +193,52 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 		realTemp[i] = 0.0;
 	}
 
+
+	//30 to 50c 
+
 	PEC_check = readRegister(ReadAuxiliaryGroupA, address, temp);
 	dataValid = dataValid & PEC_check;
 
 	PEC_check = readRegister(ReadAuxiliaryGroupB, address, temp);
 	dataValid = dataValid & PEC_check;
 
-	for (uint8_t i = 0; i < 4; i++) {
-		realTemp[i] = (double)temp[i] / 10000;	// Divide by 10,000 b/c units in V x10^-4 from ADC reading
-		// Convert millivolts to volts -> use approximation calculation -> convert to celcius -> multiply by 1000 to convert to integer without losing the end of the reading
-		realTemp[i] = 1000 * (-0.5022 * pow(realTemp[i], 5) + 6.665 * pow(realTemp[i], 4) - 35.123 * pow(realTemp[i], 3) + 92.559 * pow(realTemp[i], 2) - 144.22 * realTemp[i] + 166.76);
+	//float minimalVoltage = 0.2083; //will remove -> this is the lowest temp we can read that we care about
 
-		cellTemp[i] = (uint16_t)realTemp[i];
+	for (uint8_t i = 0; i < 4; i++){
+		if ((double)temp[i]/10000 >= 22400 || (double)temp/10000 <= 0.2) { //TODO: Fix all uneeded multiplication
+			cellTemp[i] = 0; 
+		}
 
-		dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false;
+		else { 
+			// uint8_t truncatedADC = ((cellTemp[i] >> 6) << 6); //remove 8 most lsb bits (since ADC is 12 bit resolution this is actually removing the 2 most LSB) from the adc reading to get eventual 3 digit resolution
+			uint8_t index = round(truncatedADC/1000) - 21;//convert adc to integer		
+			cellTemp[i] = lookupTableTemps[index];
+
+		}
+
+		dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false; //TODO: Validate on 'invalid' temp
 		tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
+
+		return (dataValid);
+
 	}
+
+
+
+
+
+
+
+	// for (uint8_t i = 0; i < 4; i++) {
+	// 	realTemp[i] = (double)temp[i] / 10000;	// Divide by 10,000 b/c units in V x10^-4 from ADC reading
+	// 	// Convert millivolts to volts -> use approximation calculation -> convert to celcius -> multiply by 1000 to convert to integer without losing the end of the reading
+	// 	realTemp[i] = 1000 * (-0.5022 * pow(realTemp[i], 5) + 6.665 * pow(realTemp[i], 4) - 35.123 * pow(realTemp[i], 3) + 92.559 * pow(realTemp[i], 2) - 144.22 * realTemp[i] + 166.76);
+
+	// 	cellTemp[i] = (uint16_t)realTemp[i];
+
+	// 	dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false;
+	// 	tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
+	// }
 
 	return (dataValid);
 }
