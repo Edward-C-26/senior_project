@@ -11,7 +11,7 @@
 */
 
 #include "LTC6811.h"
-#define BOARD_IS_FUCKED = 0
+#define BOARD_IS_FUCKED 0
 
 uint16_t pec15Table[256];	   // Packet Error Code
 uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor -> In datasheet :)
