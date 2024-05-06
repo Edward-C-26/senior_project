@@ -11,9 +11,12 @@
 */
 
 #include "LTC6811.h"
+#define BOARD_IS_FUCKED = 0
 
 uint16_t pec15Table[256];	   // Packet Error Code
 uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor -> In datasheet :)
+
+
 
 //! \brief Initializes Packet Error Code LUT by generating PEC look up table -> call on startup
 //! \returns none
@@ -110,18 +113,34 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool dataValid = true;
 	uint16_t voltage[12];
 
+		//board 11 is fucked 
+	if (BOARD_IS_FUCKED && address == 11){ //TODO: Change the n fucked voltages to their neighbors 
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
+		dataValid = dataValid & PEC_check;
 
-	PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
-	dataValid = dataValid & PEC_check;
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup4to6, address, voltage);
+		dataValid = dataValid & PEC_check;
 
-	PEC_check = readRegister(ReadCellVoltageRegisterGroup4to6, address, voltage);
-	dataValid = dataValid & PEC_check;
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup7to9, address, voltage);
+		dataValid = dataValid & PEC_check;
 
-	PEC_check = readRegister(ReadCellVoltageRegisterGroup7to9, address, voltage);
-	dataValid = dataValid & PEC_check;
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup10to12, address, voltage);
+		dataValid = dataValid & PEC_check;
 
-	PEC_check = readRegister(ReadCellVoltageRegisterGroup10to12, address, voltage);
-	dataValid = dataValid & PEC_check;
+	} else {
+	
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
+		dataValid = dataValid & PEC_check;
+
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup4to6, address, voltage);
+		dataValid = dataValid & PEC_check;
+
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup7to9, address, voltage);
+		dataValid = dataValid & PEC_check;
+
+		PEC_check = readRegister(ReadCellVoltageRegisterGroup10to12, address, voltage);
+		dataValid = dataValid & PEC_check;
+	}
 
 	memcpy(cellVoltage, voltage, sizeof(voltage));
 
@@ -205,23 +224,20 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 	//float minimalVoltage = 0.2083; //will remove -> this is the lowest temp we can read that we care about
 
 	for (uint8_t i = 0; i < 4; i++){
-		if ((double)temp[i]/10000 >= 22400 || (double)temp/10000 <= 0.2) { //TODO: Fix all uneeded multiplication
-			cellTemp[i] = 0; 
-		}
-
-		else { 
 			// uint8_t truncatedADC = ((cellTemp[i] >> 6) << 6); //remove 8 most lsb bits (since ADC is 12 bit resolution this is actually removing the 2 most LSB) from the adc reading to get eventual 3 digit resolution
-			uint8_t index = round(truncatedADC/1000) - 21;//convert adc to integer		
-			cellTemp[i] = lookupTableTemps[index];
+			int index = round(temp[i]/100) - 21;//convert adc to integer
+			if (index > 203 || index < 0) cellTemp[i] = 0; //if the index is out of bounds, set the temp to 0
+			else cellTemp[i] = lookupTableTemps[index];
 
+		
+			dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false; //TODO: Validate on 'invalid' temp
+			tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
+		
 		}
-
-		dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false; //TODO: Validate on 'invalid' temp
-		tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
 
 		return (dataValid);
 
-	}
+}
 
 
 
