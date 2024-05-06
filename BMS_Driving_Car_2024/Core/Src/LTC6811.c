@@ -239,26 +239,6 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 
 }
 
-
-
-
-
-
-
-	// for (uint8_t i = 0; i < 4; i++) {
-	// 	realTemp[i] = (double)temp[i] / 10000;	// Divide by 10,000 b/c units in V x10^-4 from ADC reading
-	// 	// Convert millivolts to volts -> use approximation calculation -> convert to celcius -> multiply by 1000 to convert to integer without losing the end of the reading
-	// 	realTemp[i] = 1000 * (-0.5022 * pow(realTemp[i], 5) + 6.665 * pow(realTemp[i], 4) - 35.123 * pow(realTemp[i], 3) + 92.559 * pow(realTemp[i], 2) - 144.22 * realTemp[i] + 166.76);
-
-	// 	cellTemp[i] = (uint16_t)realTemp[i];
-
-	// 	dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false;
-	// 	tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
-	// }
-
-	return (dataValid);
-}
-
 //! \brief This function reads cell temps from all of our board by calling readCellTemp for each board. NOTE : This is not proven to work properly yet.
 //! \param cfg is the configuration struct for BMS with all of the constants used 
 //! \param bmsData is the 2D array where we track the data of each cell in our pack 
