@@ -221,19 +221,21 @@ int main(void)
         BMSConfig.UV_threshold = (CHARGE_EN == 0) ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
 
         /* DO THIS WHEN TESTING BMS FAULTS*/    //*NOTE* : need to figure out which pin is the BMS fault pin
-        // bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
-        // if (BMS_FAULT == false) {
-        // global_error_count = 0;
-        // HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_RESET);
-        // } else {
-        // 	global_error_count++;
-        // 	if (global_error_count == 20) {
-        // 		global_error_count = 0;
-        // 		HAL_GPIO_WritePin(GPIOB, BMS_FLT_Pin, GPIO_PIN_SET);
-        //     }
-        // }
+         bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
+         if (BMS_FAULT == false) {
+        	 global_error_count = 0;
+        	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_RESET);
+         }
+         else {
+         	global_error_count++;
+         	if (global_error_count == 20) {
+         		global_error_count = 0;
+         		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_SET);
+             }
+         }
 
         // Finally, balance if charging and toggled 
+        // TODO: make no balance when bms fault
         if(CHARGE_EN == 0 && BALANCE_EN == 1) {
             if(charge_rate != 0) {
                 balance(BMSConfig, BMSCriticalInfo, BMS_DATA, discharge, full_discharge, balance_counter, charge_rate);
@@ -338,6 +340,11 @@ static void MX_CAN1_Init(void)
   }
   /* USER CODE BEGIN CAN1_Init 2 */
 
+  // This ties the interupt to the rx_fifo0 msg bufer
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+   {
+     Error_Handler();
+   }
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -762,6 +769,10 @@ void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
     PACKSTAT_DATA[5] = (uint8_t)(pack_power & 0xFF);
 
     HAL_CAN_AddTxMessage(&hcan1, &TxHeader, PACKSTAT_DATA, &TxMailbox);
+}
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+	//TODO: use HAL_CAN_GetRxMessage() to get the message off the rx fifo
 }
 
 // This will not work if we aren't using ADC
