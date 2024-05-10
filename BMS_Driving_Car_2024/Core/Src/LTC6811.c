@@ -11,7 +11,7 @@
 */
 
 #include "LTC6811.h"
-#define BOARD_IS_FUCKED 0
+#define BOARD_IS_FUCKED 1
 
 uint16_t pec15Table[256];	   // Packet Error Code
 uint16_t CRC15_POLY = 0x4599;  // Explain magic number por favor -> In datasheet :)
@@ -112,9 +112,8 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool PEC_check = false;
 	bool dataValid = true;
 	uint16_t voltage[12];
-
-		//board 11 is fucked 
-	if (BOARD_IS_FUCKED && address == 11){ //TODO: Change the n fucked voltages to their neighbors 
+	//board 11 is fucked 
+	if (BOARD_IS_FUCKED && address == 10){ //TODO: Change the n fucked voltages to their neighbors
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 		dataValid = dataValid & PEC_check;
 
@@ -124,8 +123,13 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup7to9, address, voltage);
 		dataValid = dataValid & PEC_check;
 
+		
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup10to12, address, voltage);
 		dataValid = dataValid & PEC_check;
+
+		voltage[2] = voltage[0];
+		voltage[3] = voltage[1];
+
 
 	} else {
 	
@@ -158,7 +162,6 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	uint16_t boardVoltage[12];
 	bool PEC_check[12];
 	bool dataValid = true;
-	uint8_t flag = 0;
 
 	wakeup_idle();
 	HAL_Delay(2);
