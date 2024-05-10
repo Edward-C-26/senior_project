@@ -113,7 +113,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool dataValid = true;
 	uint16_t voltage[12];
 	//board 11 is fucked 
-	if (BOARD_IS_FUCKED && address == 10){ //TODO: Change the n fucked voltages to their neighbors
+	if (BOARD_IS_FUCKED && address == 11){ //TODO: Change the n fucked voltages to their neighbors
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 		dataValid = dataValid & PEC_check;
 
@@ -122,13 +122,15 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup7to9, address, voltage);
 		dataValid = dataValid & PEC_check;
-
 		
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup10to12, address, voltage);
 		dataValid = dataValid & PEC_check;
 
-		voltage[2] = voltage[0];
-		voltage[3] = voltage[1];
+
+		//THIS IS TERRIBLE PRACTICE BE CAREFUL
+		voltage[1] = voltage[0];
+		voltage[2] = voltage[3];
+		voltage[11] = voltage[10];
 
 
 	} else {
@@ -173,10 +175,23 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 	wakeup_idle();
 	HAL_Delay(2);
 
+//	uint16_t allVoltages[144];
+
+
 	for (uint8_t board = 0; board < NUM_BOARDS; board++) {
 
 		// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
 		PEC_check[board] = readCellVoltage(board, boardVoltage);
+
+//		uint8_t startIdx = board * 12;
+//		uint8_t counter = 0;
+//		for (uint8_t i = startIdx; i < startIdx + 12; i++){
+//			counter++;
+//			allVoltages[i] = boardVoltage[counter];
+//
+//
+//		}
+
 		dataValid &= PEC_check[board];
 
 		// store cell number and valid data bit in bmsData
@@ -191,6 +206,7 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 			bmsData[(board * NUM_BOARDS) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
 		}
 	}
+
 
 	return dataValid;  // return true if no PEC errors for any board
 }
