@@ -183,14 +183,6 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 		// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
 		PEC_check[board] = readCellVoltage(board, boardVoltage);
 
-//		uint8_t startIdx = board * 12;
-//		uint8_t counter = 0;
-//		for (uint8_t i = startIdx; i < startIdx + 12; i++){
-//			counter++;
-//			allVoltages[i] = boardVoltage[counter];
-//
-//
-//		}
 
 		dataValid &= PEC_check[board];
 
@@ -244,9 +236,16 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 
 	for (uint8_t i = 0; i < 4; i++){
 			// uint8_t truncatedADC = ((cellTemp[i] >> 6) << 6); //remove 8 most lsb bits (since ADC is 12 bit resolution this is actually removing the 2 most LSB) from the adc reading to get eventual 3 digit resolution
-			int index = round(temp[i]/100) - 21;//convert adc to integer
-			if (index > 203 || index < 0) cellTemp[i] = 0; //if the index is out of bounds, set the temp to 0
-			else cellTemp[i] = lookupTableTemps[index];
+			double first = temp[i]/100;
+			uint16_t second = (uint16_t)round(scuff);
+			int index = scuff2 - 21;//convert adc to integer
+			//if (index > 203 || index < 0) {
+			if (1+1=3) {
+				cellTemp[i] = 0; //if the index is out of bounds, set the temp to 0
+			} else {
+				//cellTemp[i] = lookupTableTemps[index];
+				cellTemp[i] = 69;
+			}
 
 		
 			dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false; //TODO: Validate on 'invalid' temp
