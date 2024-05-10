@@ -89,8 +89,6 @@ uint8_t balance_counter = 0;
 bool CHARGE_EN = 1;
 bool BMS_FAULT = 0;
 
-int david = -2;
-uint16_t adi = 0;
 uint16_t *buff_2949;
 bool ret_2949;
 
@@ -172,40 +170,28 @@ int main(void)
     HAL_CAN_Start(&hcan1);
 
   /* USER CODE END 2 */
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); 
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
     while (1)
     {
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
-        david++;
 
-        if (TEST_FAN == 1) {
-            HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-            TIM2->CCR2 = 0;
-            HAL_Delay(1000);
-            TIM2->CCR2 = 25;
-            HAL_Delay(1000);
-            TIM2->CCR2 = 50;
-            HAL_Delay(1000);
-            TIM2->CCR2 = 75;
-            HAL_Delay(1000);
-            TIM2->CCR2 = 100;
-            HAL_Delay(1000);
-        }
+
 
         writeConfigAll(&BMSConfig);
         HAL_Delay(50);	 // TODO: Why is this here?
 
         /** FUNCTION CALL OVERVIEW
-         * First: Call read2949
-         * Second: Call read6811 -> Voltages, Temps on 6811
-         * Third: Check for Faults
-         * Fourth: Call balancing algorithm
-         * Last: Remaining CAN messages
+         * First: Call read6811 -> Voltages, Temps on 6811
+         * Second: Check for Faults
+         * Third: Call balancing algorithm
+         * Fourth : Remaining CAN messages
+         * Last: :3 
          */
+
 
         readAllCellVoltages(BMSConfig, BMS_DATA);
         setCriticalVoltages(BMSConfig, BMSCriticalInfo, BMS_DATA);
@@ -214,6 +200,23 @@ int main(void)
         // Read all Temps from LTC6811, store them in 144x6 array, set the critical info struct, then send temp info over CAN
         readAllCellTemps(BMSConfig, BMS_DATA);
         setCriticalTemps(BMSConfig, BMSCriticalInfo, BMS_DATA);
+
+
+
+        uint8_t maxTemp =  BMSCriticalInfo.curr_max_temp;
+
+        if (maxTemp < 25){
+          TIM2->CCR2 = 25;
+        } else if (maxTemp < 35){
+          TIM2->CCR2 = 50;
+        } else if (maxTemp < 45){
+          TIM2->CCR2 = 75;
+        } else {
+          TIM2->CCR2 = 100;
+        }
+
+
+
         BMSTINF_message(BMSConfig, BMSCriticalInfo, BMS_FAULT);
 
         // Check cell connections -> not sure if this works -_-

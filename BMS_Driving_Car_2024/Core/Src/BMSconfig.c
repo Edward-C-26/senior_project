@@ -19,8 +19,8 @@ void loadConfig(BMSConfigStructTypedef* cfg) {
 
 	// OV_threshold and UV_threshold: used for OV and UV fault-checking
 
-	cfg->OV_threshold = 41670;	// maximum on cell spec sheet is 4.2V, but 600/144 = 4.167
-	cfg->UV_threshold = 27500;
+	cfg->OV_threshold = 41600;	// maximum on cell spec sheet is 4.2V, but 600/144 = 4.167
+	cfg->UV_threshold = 32000;
 
 	cfg->OT_threshold = 50;		// comp is 60
 	cfg->UT_threshold = 23;		// comp is 20

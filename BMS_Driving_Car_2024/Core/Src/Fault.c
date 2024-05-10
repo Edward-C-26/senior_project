@@ -54,7 +54,7 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
 //! \param bmsStatus is an array that keeps track of BMS Fault information that will be returned over CAN
 //! \returns true if there is a BMS fault, and false if the system has returned no faults
 bool FAULT_check(BMSConfigStructTypedef cfg, BMS_critical_info_t bms_struct, uint8_t bmsData[144][6], uint8_t bmsStatus[6]) {
-    bool BMS_fault = false;
+      bool BMS_fault = false;
 //    bool OT_fault = false;
 //    bool UT_fault = false;
 //    bool OV_fault = false;
@@ -69,18 +69,32 @@ bool FAULT_check(BMSConfigStructTypedef cfg, BMS_critical_info_t bms_struct, uin
 	bmsStatus[4] = 0;
 	bmsStatus[5] = 0;
 
-    // Overvolt Fault Check
-    if(bms_struct.curr_max_voltage > cfg.OV_threshold && bms_struct.curr_max_voltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {
-        BMS_fault = true;
-        bmsStatus[0] |= 0x01;       // Fault byte
-        bmsStatus[1] = bms_struct.max_volt_cell;    // NOT zero indexed -> stored as cell # + 1
+
+    //Data is invalid at above 4.5v or below 2.5v
+
+    // Overvolt Fault Check and Invalid Data Check
+    if (bms_struct.curr_max_voltage > cfg.OV_threshold){
+        if (bms_struct.curr_max_voltage > INVALID_VOLTAGE_UPPER_THRESHOLD){
+            bms_struct.invalid_data = true;
+            bms_struct.invalid_data_cell = bms_struct.max_volt_cell;
+        } else {
+            BMS_fault = true;
+            bmsStatus[0] |= 0x01;       // Fault byte
+            bmsStatus[1] = bms_struct.max_volt_cell;    // NOT zero indexed -> stored as cell # + 1
+        }
     }
 
-    // Undervolt Fault Check
-    if(bms_struct.curr_min_voltage < cfg.UV_threshold && bms_struct.curr_min_voltage < INVALID_VOLTAGE_LOWER_THRESHOLD) {
-        BMS_fault = true;
-        bmsStatus[0] |= 0x02;       // Fault byte
-        bmsStatus[2] = bms_struct.min_volt_cell;    // NOT zero indexed -> stored as cell # + 1
+    //Undervolt Fault Check and Invalid Data Check
+    if(bms_struct.curr_min_voltage < cfg.UV_threshold) {
+        
+        if (bms_struct.curr_min_voltage < INVALID_VOLTAGE_LOWER_THRESHOLD){
+            bms_struct.invalid_data = true;
+            bms_struct.invalid_data_cell = bms_struct.min_volt_cell;
+        } else {
+            BMS_fault = true;
+            bmsStatus[0] |= 0x02;       // Fault byte
+            bmsStatus[2] = bms_struct.min_volt_cell;    // NOT zero indexed -> stored as cell # + 1
+        }   
     }
 
     // Overtemp Fault Check
@@ -95,17 +109,6 @@ bool FAULT_check(BMSConfigStructTypedef cfg, BMS_critical_info_t bms_struct, uin
         BMS_fault = true;
         bmsStatus[0] = 0x08;    // Fault byte
         bmsStatus[4] = bms_struct.min_temp_cell;    // NOT zero indexed -> stored as cell # + 1
-    }
-
-    // Invalid data check -> don't throw fault, because well... the data is just invalid
-    if(bms_struct.curr_max_voltage > INVALID_VOLTAGE_UPPER_THRESHOLD) {
-            bms_struct.invalid_data = true;
-            bms_struct.invalid_data_cell = bms_struct.max_volt_cell;
-    } else if(bms_struct.curr_min_voltage < INVALID_VOLTAGE_LOWER_THRESHOLD) {
-        bms_struct.invalid_data = true;
-        bms_struct.invalid_data_cell = bms_struct.min_volt_cell;
-    } else {
-        bms_struct.invalid_data = false;
     }
 
     // Set the status of fault (true | false) in our bms critical info struct
