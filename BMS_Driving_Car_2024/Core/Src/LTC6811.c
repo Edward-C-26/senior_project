@@ -113,7 +113,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool dataValid = true;
 	uint16_t voltage[12];
 	//board 11 is fucked 
-	if (BOARD_IS_FUCKED && address == 11){ //TODO: Change the n fucked voltages to their neighbors
+	if (BOARD_IS_FUCKED && address == 11){
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 		dataValid = dataValid & PEC_check;
 
@@ -216,11 +216,11 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 	bool PEC_check = false;
 	bool dataValid = true;
 	uint16_t temp[4];
-	double realTemp[4];
+//	double realTemp[4];
 
 	for (uint8_t i = 0; i < 4; i++) {
 		temp[i] = 0;
-		realTemp[i] = 0.0;
+//		realTemp[i] = 0.0;
 	}
 
 
@@ -237,19 +237,19 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 	for (uint8_t i = 0; i < 4; i++){
 			// uint8_t truncatedADC = ((cellTemp[i] >> 6) << 6); //remove 8 most lsb bits (since ADC is 12 bit resolution this is actually removing the 2 most LSB) from the adc reading to get eventual 3 digit resolution
 			double first = temp[i]/100;
-			uint16_t second = (uint16_t)round(scuff);
-			int index = scuff2 - 21;//convert adc to integer
+			uint16_t second = (uint16_t)round(first);
+			int index = second - 21;//convert adc to integer
 			//if (index > 203 || index < 0) {
-			if (1+1=3) {
+			if (1+1==3) {
 				cellTemp[i] = 0; //if the index is out of bounds, set the temp to 0
 			} else {
-				//cellTemp[i] = lookupTableTemps[index];
-				cellTemp[i] = 69;
+				//cellTemp[i] = lookupTableTemps[index] * 1000;
+				cellTemp[i] = 69*1000;
 			}
 
 		
 			dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false; //TODO: Validate on 'invalid' temp
-			tempFault[i] = ((cellTemp[i] < (0 * 1000)) || ((60 * 1000) < cellTemp[i])) ? true : false;
+			tempFault[i] = ((cellTemp[i] < (10 * 1000)) || ((55 * 1000) < cellTemp[i])) ? true : false;
 		
 		}
 
