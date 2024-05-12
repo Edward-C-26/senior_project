@@ -38,6 +38,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define POLLING_ID 0x4E0
 #define CELLVAL_ID 0x780
 #define BMSSTAT_ID 0x781
 #define BMSVINF_ID 0x782
@@ -49,7 +50,7 @@
 
 #define CHARGER_IN_ID 0x1806E5F4
 #define CHARGER_INFO_ID 0x700
-
+#define CONSTANT_CAN_ENABLE 1
 
 #define TEST_FAN 0
 #define BALANCE_EN  0
@@ -117,7 +118,7 @@ void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms);
 void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool BMS_FAULT);
 // void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]); // old method 
 void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms); // draft :D
-
+bool pollingFlag = false;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -171,6 +172,7 @@ int main(void)
 
   /* USER CODE END 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); 
+  uint16_t adi = 0;
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -178,7 +180,7 @@ int main(void)
     {
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
-
+    	adi++;
 
 
         writeConfigAll(&BMSConfig);
@@ -195,7 +197,7 @@ int main(void)
 
         readAllCellVoltages(BMSConfig, BMS_DATA);
         setCriticalVoltages(BMSConfig, BMSCriticalInfo, BMS_DATA);
-        BMSVINF_message(BMSConfig, BMSCriticalInfo);
+
 
         // Read all Temps from LTC6811, store them in 144x6 array, set the critical info struct, then send temp info over CAN
         readAllCellTemps(BMSConfig, BMS_DATA);
@@ -204,20 +206,23 @@ int main(void)
 
 
         uint8_t maxTemp =  BMSCriticalInfo.curr_max_temp;
+        switch (maxTemp) {
+            case 0 ... 24:
+                TIM2->CCR2 = 25;
+                break;
+            case 25 ... 34:
+                TIM2->CCR2 = 50;
+                break;
+            case 35 ... 44:
+                TIM2->CCR2 = 75;
+                break;
+            default:
+                TIM2->CCR2 = 100;
+                break;
+}
 
-        if (maxTemp < 25){
-          TIM2->CCR2 = 25;
-        } else if (maxTemp < 35){
-          TIM2->CCR2 = 50;
-        } else if (maxTemp < 45){
-          TIM2->CCR2 = 75;
-        } else {
-          TIM2->CCR2 = 100;
-        }
 
-
-
-        BMSTINF_message(BMSConfig, BMSCriticalInfo, BMS_FAULT);
+        //Min and max temps of the pack 
 
         // Check cell connections -> not sure if this works -_-
         checkAllCellConnections(BMSConfig, BMS_DATA);
@@ -260,11 +265,21 @@ int main(void)
         }
 
         // Send remaining CAN messages
+
+
+      if (pollingFlag || CONSTANT_CAN_ENABLE){
+        //Send max and min voltages of the pack
+        BMSVINF_message(BMSConfig, BMSCriticalInfo);    
+        BMSTINF_message(BMSConfig, BMSCriticalInfo, BMS_FAULT);
         PACKSTAT_message(BMSConfig, BMSCriticalInfo);
         BMSSTAT_message(BMSConfig, BMS_STATUS);
         CELLVAL_message(BMSConfig, BMS_DATA);
+
         PACKSTAT_message(BMSConfig, BMSCriticalInfo);
+        pollingFlag = false;
+      }
     }
+
 
   /* USER CODE END 3 */
 }
@@ -776,7 +791,13 @@ void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	//TODO: use HAL_CAN_GetRxMessage() to get the message off the rx fifo
+  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData); 
+  if (RxHeader.StdId == POLLING_ID) {
+    pollingFlag = true;
+  }
+
 }
+
 
 // This will not work if we aren't using ADC
 /*
