@@ -265,17 +265,14 @@ int main(void)
         }
 
         // Send remaining CAN messages
-
-
-      if (pollingFlag || CONSTANT_CAN_ENABLE){
-        //Send max and min voltages of the pack
         BMSVINF_message(BMSConfig, BMSCriticalInfo);    
         BMSTINF_message(BMSConfig, BMSCriticalInfo, BMS_FAULT);
         PACKSTAT_message(BMSConfig, BMSCriticalInfo);
         BMSSTAT_message(BMSConfig, BMS_STATUS);
-        CELLVAL_message(BMSConfig, BMS_DATA);
-
         PACKSTAT_message(BMSConfig, BMSCriticalInfo);
+
+      if (pollingFlag || CONSTANT_CAN_ENABLE){
+        CELLVAL_message(BMSConfig, BMS_DATA);
         pollingFlag = false;
       }
     }
