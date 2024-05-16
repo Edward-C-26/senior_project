@@ -22,8 +22,8 @@ void loadConfig(BMSConfigStructTypedef* cfg) {
 	cfg->OV_threshold = 41600;	// maximum on cell spec sheet is 4.2V, but 600/144 = 4.167
 	cfg->UV_threshold = 32000;
 
-	cfg->OT_threshold = 50;		// comp is 60
-	cfg->UT_threshold = 23;		// comp is 20
+	cfg->OT_threshold = 50*1000;		// comp is 60
+	cfg->UT_threshold = 17*1000;		// comp is 20
 
 	cfg->LUV_threshold = 22500;
 	cfg->HUV_threshold = 27500;

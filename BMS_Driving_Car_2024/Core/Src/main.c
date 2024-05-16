@@ -52,7 +52,6 @@
 #define CHARGER_INFO_ID 0x700
 #define CONSTANT_CAN_ENABLE 1
 
-#define TEST_FAN 0
 #define BALANCE_EN  0
 
 /* USER CODE END PD */
@@ -193,15 +192,11 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-
-
         readAllCellVoltages(BMSConfig, BMS_DATA);
-        setCriticalVoltages(BMSConfig, BMSCriticalInfo, BMS_DATA);
-
-
+        setCriticalVoltages(&BMSConfig, &BMSCriticalInfo, BMS_DATA);
         // Read all Temps from LTC6811, store them in 144x6 array, set the critical info struct, then send temp info over CAN
         readAllCellTemps(BMSConfig, BMS_DATA);
-        setCriticalTemps(BMSConfig, BMSCriticalInfo, BMS_DATA);
+        setCriticalTemps(&BMSConfig, &BMSCriticalInfo, BMS_DATA);
 
 
 
@@ -219,24 +214,24 @@ int main(void)
             default:
                 TIM2->CCR2 = 100;
                 break;
-}
+       }
 
-
-        //Min and max temps of the pack 
 
         // Check cell connections -> not sure if this works -_-
-        checkAllCellConnections(BMSConfig, BMS_DATA);
+//        checkAllCellConnections(BMSConfig, BMS_DATA);
+
         BMSConfig.UV_threshold = (CHARGE_EN == 0) ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
 
+
         /* DO THIS WHEN TESTING BMS FAULTS*/    //*NOTE* : need to figure out which pin is the BMS fault pin
-         bool BMS_FAULT = FAULT_check(BMSConfig, BMSCriticalInfo, BMS_DATA, BMS_STATUS);
+         bool BMS_FAULT = FAULT_check(&BMSConfig, &BMSCriticalInfo, BMS_DATA, BMS_STATUS);
          if (BMS_FAULT == false) {
         	 global_error_count = 0;
         	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_RESET);
          }
          else {
          	global_error_count++;
-         	if (global_error_count == 20) {
+         	if (global_error_count == 1) {
          		global_error_count = 0;
          		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_SET);
              }
@@ -246,7 +241,7 @@ int main(void)
         // TODO: make no balance when bms fault
         if(CHARGE_EN == 0 && BALANCE_EN == 1) {
             if(charge_rate != 0) {
-                balance(BMSConfig, BMSCriticalInfo, BMS_DATA, discharge, full_discharge, balance_counter, charge_rate);
+                balance(&BMSConfig, &BMSCriticalInfo, BMS_DATA, discharge, full_discharge, balance_counter, charge_rate);
 
                 if(balance_counter == 12) {
                     balance_counter = 0;

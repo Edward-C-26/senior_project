@@ -7,7 +7,7 @@
 // Lock your computer bro --Louis Ye
 
 
-static const uint8_t lookupTableTemps[] = {
+static const float lookupTableTemps[] = {
 	//203 value lookup table to avoid Stenhart-Hart equation.
 	//Resolution increases around 40c to account for change in equation
 	//Values are in 0.5c increments

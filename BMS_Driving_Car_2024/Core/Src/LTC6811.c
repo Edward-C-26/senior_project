@@ -113,7 +113,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool dataValid = true;
 	uint16_t voltage[12];
 	//board 11 is fucked 
-	if (BOARD_IS_FUCKED && address == 11){
+	if (BOARD_IS_FUCKED && address == 0){
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 		dataValid = dataValid & PEC_check;
 
@@ -129,6 +129,8 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 
 		//THIS IS TERRIBLE PRACTICE BE CAREFUL
 		voltage[1] = voltage[0];
+//		voltage[1] = 44000;
+
 		voltage[2] = voltage[3];
 		voltage[11] = voltage[10];
 
@@ -240,12 +242,8 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 			uint16_t second = (uint16_t)round(first);
 			int index = second - 21;//convert adc to integer
 			//if (index > 203 || index < 0) {
-			if (1+1==3) {
-				cellTemp[i] = 0; //if the index is out of bounds, set the temp to 0
-			} else {
-				//cellTemp[i] = lookupTableTemps[index] * 1000;
-				cellTemp[i] = 69*1000;
-			}
+			//cellTemp[i] = 20*1000;
+			cellTemp[i] = lookupTableTemps[index] * 1000;
 
 		
 			dcFault[i] = ((cellTemp[i] < -(20 * 1000)) || ((125 * 1000) < cellTemp[i])) ? true : false; //TODO: Validate on 'invalid' temp
