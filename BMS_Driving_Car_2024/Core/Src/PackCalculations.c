@@ -14,12 +14,22 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
     uint16_t minCellVoltage;
     uint16_t cellVoltage;
 
+    uint16_t totalVoltage;
+
+    uint16_t maxCellTemp;
+	uint16_t minCellTemp;
+	uint16_t cellTemp;
+
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
 
 
 
     	//First two is due to fucky cell voltages, unsure about 0 -> for sume reason cellVoltage goes to 1027?
+
     	cellVoltage = (((uint16_t)bmsData[cell][2]) << 8 | (uint16_t)bmsData[cell][3]);
+
+    	totalVoltage += cellVoltage;
+
 
     	maxCellVoltage = bms->curr_max_voltage;
 
@@ -36,12 +46,14 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 
         if((cellVoltage < minCellVoltage || minCellVoltage == 0) && cellVoltage > INVALID_VOLTAGE_LOWER_THRESHOLD) {
             bms->curr_min_voltage = cellVoltage;
-
         }
+
+        bms->packVoltage = totalVoltage;
+
+
+         }
     }
 
-
-}
 
 //! \brief This method calculates the maximum and minimum cell temps in the pack, and sets those values w/ the associated
 //      cell number to the bms critical info struct
@@ -54,21 +66,12 @@ void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uin
 	    uint16_t minCellTemp;
 	    uint16_t cellTemp;
 
-	    for(uint8_t cell = 1; cell < NUM_CELLS; cell++) {
-
-
-
-
+	    for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
 	    	cellTemp = (((uint16_t)bmsData[cell][4]) << 8 | (uint16_t)bmsData[cell][5]);
-
 	    	maxCellTemp = bms->curr_max_temp;
-
-
 	    	if(cellTemp > maxCellTemp){
 	    	   bms->curr_max_temp = cellTemp;
 	    	}
-
-
 	        minCellTemp = bms->curr_min_temp;
 
 	        if(cellTemp < minCellTemp || minCellTemp == 0) {

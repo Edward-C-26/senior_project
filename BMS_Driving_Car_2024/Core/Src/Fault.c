@@ -114,7 +114,7 @@ bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, u
     if(bms_struct->curr_min_temp < 17000) {
 
         BMS_fault = true;
-        bmsStatus[0] = 0x08;    // Fault byte
+        bmsStatus[0] |= 0x08;    // Fault byte
         bmsStatus[4] = bms_struct->min_temp_cell;    // NOT zero indexed -> stored as cell # + 1
     }
 

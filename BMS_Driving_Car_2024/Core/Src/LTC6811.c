@@ -113,7 +113,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 	bool dataValid = true;
 	uint16_t voltage[12];
 	//board 11 is fucked 
-	if (BOARD_IS_FUCKED && address == 0){
+	if (BOARD_IS_FUCKED && address == 11){
 		PEC_check = readRegister(ReadCellVoltageRegisterGroup1to3, address, voltage);
 		dataValid = dataValid & PEC_check;
 

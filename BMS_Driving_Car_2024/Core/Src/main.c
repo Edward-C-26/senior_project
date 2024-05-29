@@ -170,7 +170,6 @@ int main(void)
     HAL_CAN_Start(&hcan1);
 
   /* USER CODE END 2 */
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); 
   uint16_t adi = 0;
 
   /* Infinite loop */
@@ -180,7 +179,8 @@ int main(void)
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
     	adi++;
-
+    	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+    	TIM2 -> CCR2 = 50;
 
         writeConfigAll(&BMSConfig);
         HAL_Delay(50);	 // TODO: Why is this here?
@@ -194,31 +194,19 @@ int main(void)
          */
         readAllCellVoltages(BMSConfig, BMS_DATA);
         setCriticalVoltages(&BMSConfig, &BMSCriticalInfo, BMS_DATA);
+
+
         // Read all Temps from LTC6811, store them in 144x6 array, set the critical info struct, then send temp info over CAN
         readAllCellTemps(BMSConfig, BMS_DATA);
+
         setCriticalTemps(&BMSConfig, &BMSCriticalInfo, BMS_DATA);
 
 
 
-        uint8_t maxTemp =  BMSCriticalInfo.curr_max_temp;
-        switch (maxTemp) {
-            case 0 ... 24:
-                TIM2->CCR2 = 25;
-                break;
-            case 25 ... 34:
-                TIM2->CCR2 = 50;
-                break;
-            case 35 ... 44:
-                TIM2->CCR2 = 75;
-                break;
-            default:
-                TIM2->CCR2 = 100;
-                break;
-       }
 
 
         // Check cell connections -> not sure if this works -_-
-//        checkAllCellConnections(BMSConfig, BMS_DATA);
+        checkAllCellConnections(BMSConfig, BMS_DATA);
 
         BMSConfig.UV_threshold = (CHARGE_EN == 0) ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
 
@@ -732,8 +720,8 @@ void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
 void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool BMS_FAULT) {
     uint16_t minT = bms.curr_min_temp;
     uint8_t minCell = bms.min_temp_cell;
-    uint16_t maxT = bms.max_temp_cell;
-    uint8_t maxCell = bms.curr_max_temp;
+    uint16_t maxT = bms.curr_max_temp;
+    uint8_t maxCell = bms.max_temp_cell;
 
     // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC)); //bug -> we only take 4 readings per board for temperatures
     // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC));
