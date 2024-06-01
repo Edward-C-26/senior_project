@@ -70,32 +70,17 @@ bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, u
 
     // Overvolt Fault Check and Invalid Data Check
     if (bms_struct->curr_max_voltage > 41600){
-
-        if (bms_struct->curr_max_voltage > INVALID_VOLTAGE_UPPER_THRESHOLD){
-            bms_struct->invalid_data = true;
-            bms_struct->invalid_data_cell = bms_struct->max_volt_cell;
-        } else {
-            BMS_fault = true;
-            bmsStatus[0] |= 0x01;       // Fault byte
-            bmsStatus[1] = bms_struct->max_volt_cell;    // NOT zero indexed -> stored as cell # + 1
-        }
+        BMS_fault = true;
+        bmsStatus[0] |= 0x01;       // Fault byte
+        bmsStatus[1] = bms_struct->max_volt_cell;    // NOT zero indexed -> stored as cell # + 1
     }
 
     //Undervolt Fault Check and Invalid Data Check
     if(bms_struct->curr_min_voltage < 32000) {
-        
-
-        if (bms_struct->curr_min_voltage < INVALID_VOLTAGE_LOWER_THRESHOLD){
-            bms_struct->invalid_data = true;
-            bms_struct->invalid_data_cell = bms_struct->min_volt_cell;
-        } else {
-            BMS_fault = true;
-            bmsStatus[0] |= 0x02;       // Fault byte
-            bmsStatus[2] = bms_struct->min_volt_cell;    // NOT zero indexed -> stored as cell # + 1
-        }
+        BMS_fault = true;
+        bmsStatus[0] |= 0x02;       // Fault byte
+        bmsStatus[2] = bms_struct->min_volt_cell;    // NOT zero indexed -> stored as cell # + 1
     }
-
-
 
     if(bms_struct->curr_max_temp > 50000) {
         BMS_fault = true;

@@ -34,6 +34,10 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
             bms->curr_max_voltage = cellVoltage;
 			bms->max_volt_cell = cell;
         }
+		if(cellVoltage >= INVALID_VOLTAGE_UPPER_THRESHOLD) {
+			bms->invalid_data = true;
+            bms->invalid_data_cell = cell;
+		}
 
         minCellVoltage = bms->curr_min_voltage;
 
@@ -41,6 +45,10 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
             bms->curr_min_voltage = cellVoltage;
 			bms->min_volt_cell = cell;
         }
+		if(cellVoltage <= INVALID_VOLTAGE_LOWER_THRESHOLD) {
+			bms->invalid_data = true;
+            bms->invalid_data_cell = cell;
+		}
 
         bms->packVoltage = totalVoltage;
         }
