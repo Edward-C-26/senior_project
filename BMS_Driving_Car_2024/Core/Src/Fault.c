@@ -67,12 +67,6 @@ bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, u
 
 
     //Data is invalid at above 4.5v or below 2.5v
-	uint16_t maxV = bms_struct -> curr_max_voltage;
-	uint16_t minV = bms_struct -> curr_min_voltage;
-	uint16_t maxT = bms_struct -> curr_max_temp;
-	uint16_t minT = bms_struct -> curr_min_temp;
-
-
 
     // Overvolt Fault Check and Invalid Data Check
     if (bms_struct->curr_max_voltage > 41600){

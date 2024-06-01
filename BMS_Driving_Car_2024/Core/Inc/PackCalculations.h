@@ -6,6 +6,8 @@
 // #include "LTC2949.h"
 #include "Fault.h"
 
+#define MAXINT16 65535
+
 void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsData[144][6]);
 void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsData[144][6]);
 void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsData[144][6], bool cellDischarge[12][12], bool fullDischarge[12][12], uint8_t balanceCounter, uint8_t chargeRate);

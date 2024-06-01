@@ -16,42 +16,34 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 
     uint16_t totalVoltage;
 
-    uint16_t maxCellTemp;
-	uint16_t minCellTemp;
-	uint16_t cellTemp;
+
+	bms->curr_min_voltage = MAXINT16;
+	bms->curr_max_voltage = 0;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-
-
-
     	//First two is due to fucky cell voltages, unsure about 0 -> for sume reason cellVoltage goes to 1027?
 
     	cellVoltage = (((uint16_t)bmsData[cell][2]) << 8 | (uint16_t)bmsData[cell][3]);
 
     	totalVoltage += cellVoltage;
 
-
     	maxCellVoltage = bms->curr_max_voltage;
 
         // Check if cell readings is a max voltage or min voltage
         if(cellVoltage > maxCellVoltage && cellVoltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {
             bms->curr_max_voltage = cellVoltage;
-
+			bms->max_volt_cell = cell;
         }
-
-        uint16_t maxVoltage = bms->curr_max_voltage;
-
 
         minCellVoltage = bms->curr_min_voltage;
 
         if((cellVoltage < minCellVoltage || minCellVoltage == 0) && cellVoltage > INVALID_VOLTAGE_LOWER_THRESHOLD) {
             bms->curr_min_voltage = cellVoltage;
+			bms->min_volt_cell = cell;
         }
 
         bms->packVoltage = totalVoltage;
-
-
-         }
+        }
     }
 
 
@@ -66,18 +58,21 @@ void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uin
 	    uint16_t minCellTemp;
 	    uint16_t cellTemp;
 
+		bms->curr_min_temp = MAXINT16;
+		bms->curr_max_temp = 0;
+	
 	    for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
 	    	cellTemp = (((uint16_t)bmsData[cell][4]) << 8 | (uint16_t)bmsData[cell][5]);
 	    	maxCellTemp = bms->curr_max_temp;
 	    	if(cellTemp > maxCellTemp){
 	    	   bms->curr_max_temp = cellTemp;
+	    	   bms->max_temp_cell = cell;
 	    	}
 	        minCellTemp = bms->curr_min_temp;
 
 	        if(cellTemp < minCellTemp || minCellTemp == 0) {
 	            bms->curr_min_temp = cellTemp;
-
-
+	            bms->min_temp_cell = cell;
 	        }
 	    }
 
