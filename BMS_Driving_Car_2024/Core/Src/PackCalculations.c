@@ -25,7 +25,7 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 
     	cellVoltage = (((uint16_t)bmsData[cell][2]) << 8 | (uint16_t)bmsData[cell][3]);
 
-    	totalVoltage += cellVoltage;
+    	totalVoltage += (cellVoltage/10000);
 
     	maxCellVoltage = bms->curr_max_voltage;
 
@@ -48,11 +48,10 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 		if(cellVoltage <= INVALID_VOLTAGE_LOWER_THRESHOLD) {
 			bms->invalid_data = true;
             bms->invalid_data_cell = cell;
-		}
-
-        bms->packVoltage = totalVoltage;
-        }
+		}        
     }
+	bms->packVoltage = totalVoltage;
+}
 
 
 //! \brief This method calculates the maximum and minimum cell temps in the pack, and sets those values w/ the associated
