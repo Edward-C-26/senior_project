@@ -3,6 +3,7 @@
 */
 #include "PackCalculations.h"
 
+
 //! \brief This method calculates the maximum and minimum cell voltages in the pack, and sets those values w/ the associated
 //      cell number to the bms critical info struct
 //! \param cfg is the bms configuration file with constants used in our bms system
@@ -14,7 +15,7 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
     uint16_t minCellVoltage;
     uint16_t cellVoltage;
 
-    uint16_t totalVoltage;
+    uint16_t totalVoltage = 0;
 
 
 	bms->curr_min_voltage = MAXINT16;
@@ -25,7 +26,7 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 
     	cellVoltage = (((uint16_t)bmsData[cell][2]) << 8 | (uint16_t)bmsData[cell][3]);
 
-    	totalVoltage += (cellVoltage/10000);
+    	totalVoltage += (cellVoltage/1000);
 
     	maxCellVoltage = bms->curr_max_voltage;
 
