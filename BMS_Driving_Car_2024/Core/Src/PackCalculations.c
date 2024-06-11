@@ -76,8 +76,8 @@ void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uin
 	    	   bms->curr_max_temp = cellTemp;
 	    	   bms->max_temp_cell = cell;
 	    	}
-	        minCellTemp = bms->curr_min_temp;
 
+	    	minCellTemp = bms->curr_min_temp;
 	        if(cellTemp < minCellTemp || minCellTemp == 0) {
 	            bms->curr_min_temp = cellTemp;
 	            bms->min_temp_cell = cell;

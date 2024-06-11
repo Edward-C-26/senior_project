@@ -674,12 +674,12 @@ void CELLVAL_message(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
     //Send dummy CAN message to wake up bus
 
 
-    CELLVAL_DATA[0] = 1;
-    CELLVAL_DATA[1] = 2;
-    CELLVAL_DATA[2] = 3;
-    CELLVAL_DATA[3] = 4;
-    CELLVAL_DATA[4] = 5;
-    CELLVAL_DATA[5] = 6;
+    CELLVAL_DATA[0] = 0;
+    CELLVAL_DATA[1] = 0;
+    CELLVAL_DATA[2] = 0;
+    CELLVAL_DATA[3] = 0;
+    CELLVAL_DATA[4] = 0;
+    CELLVAL_DATA[5] = 0;
 
 
     HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CELLVAL_DATA, &TxMailbox);

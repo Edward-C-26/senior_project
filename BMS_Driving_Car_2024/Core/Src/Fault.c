@@ -76,7 +76,7 @@ bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, u
     }
 
     //Undervolt Fault Check and Invalid Data Check
-    if(bms_struct->curr_min_voltage < 32000) {
+    if(bms_struct->curr_min_voltage < 30000) {
         BMS_fault = true;
         bmsStatus[0] |= 0x02;       // Fault byte
         bmsStatus[2] = bms_struct->min_volt_cell;    // NOT zero indexed -> stored as cell # + 1

@@ -1,0 +1,15 @@
+../Core/Src/LTC6811.c:23:6:initPECTable	12	static
+../Core/Src/LTC6811.c:45:10:calculatePEC	8	static
+../Core/Src/LTC6811.c:401:6:wakeup_idle	8	static
+../Core/Src/LTC6811.c:414:6:readRegister	72	static
+../Core/Src/LTC6811.c:111:6:readCellVoltage	40	static
+../Core/Src/LTC6811.c:217:6:readCellTemp	32	static
+../Core/Src/LTC6811.c:308:6:readConfig	24	static
+../Core/Src/LTC6811.c:61:6:writeConfigAddress	56	static
+../Core/Src/LTC6811.c:98:6:writeConfigAll	16	static
+../Core/Src/LTC6811.c:383:6:dischargeCellGroups	24	static
+../Core/Src/LTC6811.c:507:6:sendBroadcastCommand	16	static
+../Core/Src/LTC6811.c:163:6:readAllCellVoltages	56	static
+../Core/Src/LTC6811.c:262:6:readAllCellTemps	40	static
+../Core/Src/LTC6811.c:335:6:checkAllCellConnections	40	dynamic
+../Core/Src/LTC6811.c:526:6:sendAddressCommand	16	static
