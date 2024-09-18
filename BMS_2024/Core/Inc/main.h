@@ -31,7 +31,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -99,6 +99,21 @@ extern SPI_HandleTypeDef* ltc_spi;
 #define FAN_PWM_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+
+// This struct holds the configuration variables required for manual balancing
+// https://confluence.illinielectricmotorsports.com/display/SOF/Manual+Balancing+Implementation
+typedef struct {
+	bool charge_en;				// defaults to false
+	uint16_t charge_voltage;	// defaults to 600V | multiplied by 10 | 600V -> 6000 in the variable
+	uint16_t charge_current;	// defaults to 0A	| multiplied by 10 | 10A -> 100 in the variable
+
+	bool discharge_balance_en;	// defaults to false
+	uint8_t num_cells_discharged_per_secondary;	// defaults to 0, must be set between 1 to 12 when discharge_balance_en == true
+	uint16_t discharge_threshold_voltage;	// defaults to 4.16V | multiplied by 10,000 | 4.16V -> 41600 in the variable
+
+	bool valid_charge_message;
+
+} manual_balancing_t;
 
 /* USER CODE END Private defines */
 

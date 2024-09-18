@@ -82,7 +82,7 @@ bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, C
         bmsStatus[2] = bms_struct->min_volt_cell;    // NOT zero indexed -> stored as cell # + 1
     }
 
-    if(bms_struct->curr_max_temp > 50000) {
+    if(bms_struct->curr_max_temp > 60000) {
         BMS_fault = true;
         bmsStatus[0] |= 0x04;       // Fault byte
         bmsStatus[3] = bms_struct->max_temp_cell;    // NOT zero indexed -> stored as cell # + 1
@@ -90,7 +90,7 @@ bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, C
 
     // Undertemp Fault Check
     //
-    if(bms_struct->curr_min_temp < 17000) {
+    if(bms_struct->curr_min_temp < 2000) {
 
         BMS_fault = true;
         bmsStatus[0] |= 0x08;    // Fault byte

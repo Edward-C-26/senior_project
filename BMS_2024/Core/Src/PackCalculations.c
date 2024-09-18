@@ -134,5 +134,46 @@ void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
 		}
 	}
 	
-	balanceCounter++;
+	balance_counter++;
+
+    if(balance_counter >= 12) {
+        balance_counter = 0;
+    } 
+}
+
+//! \brief WIP/untested. Should be run while accumulator is not charging, discharges any cells above the threshold
+void thresholdBalance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms,
+        CellData bmsData[144], bool cell_discharge[12][12],
+        uint16_t cell_discharge_threshold,
+        uint8_t num_cells_discharge_per_secondary) {
+	uint16_t cell_voltage = 0;
+
+	if (num_cells_discharge_per_secondary == 0) {	// protect from divide by 0 error
+		return;
+	}
+
+	uint8_t discharge_cell_modulo = 12 / num_cells_discharge_per_secondary;
+	
+	if(bms->curr_max_voltage > cell_discharge_threshold) { // if all cells are below the threshold, no need to discharge any of them
+		for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
+			cell_voltage = bmsData[cell].voltage;
+			
+			if(cell_voltage - cell_discharge_threshold <= 0 || cell_voltage == 65535) {
+				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 0;
+				continue; // no need to discharge, also skipping garbage values
+			}
+
+			if(cell % discharge_cell_modulo == balance_counter) { // We won't get to this point if the cell voltage is below the threshold
+				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 1;
+			} else {
+				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 0;
+			}
+		}
+
+		balance_counter++;
+
+		if(balance_counter >= discharge_cell_modulo) {
+			balance_counter = 0;
+		}
+	}
 }

@@ -48,12 +48,19 @@
 #define CELL_VOLTAGE_FAULTS 0x785
 #define CELL_TEMP_FAULTS 0x786
 
-#define CHARGER_IN_ID 0x1806E5F4
+#define CHARGER_IN_ID 0x1806E5F4	// charger CAN ID is 0x1806E5F4
 #define CHARGER_INFO_ID 0x700
 #define CONSTANT_CAN_ENABLE 1
 
+
 #define BALANCE_EN  0
-#define CHARGE_EN 1
+
+// STM manual balancing
+#define THRESHOLD_BALANCE_EN 0
+#define DISCHARGE_THRESHOLD 65535 // well above cell max voltage LOOK AT ACTUAL FUNCTION CALL FOR THRESHOLD SETTING
+
+// CAN Manual Balancing
+#define MANUAL_BALANCING_ID 0x4E1
 
 /* USER CODE END PD */
 
@@ -86,8 +93,10 @@ uint8_t ChargerTxData[8];
 uint8_t charge_rate = 2;
 uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
+uint8_t charging_counter = 0;
 
 bool bmsFault = 0;
+bool CHARGE_EN = 0;
 
 uint16_t *buff_2949;
 bool ret_2949;
@@ -96,7 +105,9 @@ CellData bmsData[144];
 uint8_t BMS_STATUS[6];
 bool discharge[12][12];
 bool full_discharge[12][12];
-bool pollingFlag = false;
+
+manual_balancing_t manual_balancing_config;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -116,6 +127,12 @@ static void BMSVINF_message(BMS_critical_info_t const *bms);
 static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault);
 // void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]); // old method 
 static void PACKSTAT_message(BMS_critical_info_t const *bms); // draft :D
+
+// Manual Charging/Balancing Functions
+void CHARGER_message();
+void resetChargerVariables();
+void getLaptopCanMessage();
+bool pollingFlag = false;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -164,6 +181,7 @@ int main(void)
     initPECTable();
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo, &BMSConfig);
+    resetChargerVariables();
 
     HAL_CAN_Start(&hcan1);
 
@@ -247,6 +265,50 @@ int main(void)
             }
         }
 
+        // poll for CAN1 Message from Laptop
+        if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
+        	getLaptopCanMessage();
+
+			// Clear the receive FIFO0 by reading and discarding all messages
+			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0)
+			{
+				// Retrieve and discard the message
+				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData);
+			}
+    	}
+
+        // Discharge cells if charge message is valid AND discharge is enabled AND there is no BMS fault
+        if((manual_balancing_config.valid_charge_message == true) &&
+			(manual_balancing_config.discharge_balance_en == true) &&
+			(!bmsFault == true)) {
+
+            thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, manual_balancing_config.discharge_threshold_voltage, manual_balancing_config.num_cells_discharged_per_secondary);
+          
+//            setChargerTxData(BMSConfig); // this is unsed for now
+            dischargeCellGroups(&BMSConfig, discharge);
+            HAL_Delay(BMSConfig.dischargeTime);
+
+            dischargeCellGroups(&BMSConfig, discharge);
+            HAL_Delay(BMSConfig.dischargeTime);
+        }
+        else {
+        	thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, 43000, 0);	// default to an "off" state, cells should never go this high
+        }
+
+        // send CAN messages to charger
+        // if charge message from laptop is valid AND charge is enabled AND there is no BMS fault
+        if ((manual_balancing_config.valid_charge_message == true) &&
+			(manual_balancing_config.charge_en == true) &&
+			(!bmsFault == true)) {
+        	CHARGER_message();
+        }
+
+        // stop messages from being sent if no message has been sent in 2 seconds
+        if (charging_counter > 4) {
+        	resetChargerVariables();
+        }
+        charging_counter++;
+
         // Send remaining CAN messages
         BMSVINF_message(&BMSCriticalInfo);    
         BMSTINF_message(&BMSCriticalInfo, bmsFault);
@@ -314,7 +376,6 @@ static void MX_CAN1_Init(void)
 {
 
   /* USER CODE BEGIN CAN1_Init 0 */
-
   /* USER CODE END CAN1_Init 0 */
 
   /* USER CODE BEGIN CAN1_Init 1 */
@@ -338,11 +399,35 @@ static void MX_CAN1_Init(void)
   }
   /* USER CODE BEGIN CAN1_Init 2 */
 
+	CAN_FilterTypeDef  sFilterConfig;
+	sFilterConfig.FilterBank = 0;
+	sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+	sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+	sFilterConfig.FilterIdHigh = 0x4E1 << 5;  // 0x4E1 shifted left by 5 bits
+	sFilterConfig.FilterIdLow = 0x0000;
+	sFilterConfig.FilterMaskIdHigh = 0xFFE0;
+	sFilterConfig.FilterMaskIdLow = 0x0000;
+	sFilterConfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+	sFilterConfig.FilterActivation = ENABLE;
+	sFilterConfig.SlaveStartFilterBank = 14;
+
+	if (HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig) != HAL_OK)
+	{
+	  /* Filter configuration Error */
+	  Error_Handler();
+	}
+
+  if (HAL_CAN_Start(&hcan1) != HAL_OK)
+  {
+	/* Start Error */
+	Error_Handler();
+  }
+
   // This ties the interupt to the rx_fifo0 msg bufer
-  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-   {
-     Error_Handler();
-   }
+//  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+//   {
+//     Error_Handler();
+//   }
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -628,7 +713,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void setChargerTxData(BMSConfigStructTypedef cfg) {
+void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
     ChargerTxHeader.StdId = CHARGER_OUT_ID;
     ChargerTxHeader.DLC = 8;
 
@@ -783,13 +868,122 @@ static void PACKSTAT_message(BMS_critical_info_t const *bms) {
     HAL_CAN_AddTxMessage(&hcan1, &TxHeader, PACKSTAT_DATA, &TxMailbox);
 }
 
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
-	//TODO: use HAL_CAN_GetRxMessage() to get the message off the rx fifo
-  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData); 
+void CHARGER_message() {
+	TxHeader.StdId = 0;  // Set to 0 for extended IDs
+	TxHeader.ExtId = CHARGER_IN_ID; // Set your 29-bit ID
+	TxHeader.DLC = 8;				// set command length
+	TxHeader.IDE = CAN_ID_EXT;       // Set to extended ID
+
+	uint8_t CHARGER_DATA[8];
+
+	if (manual_balancing_config.charge_en == true && manual_balancing_config.valid_charge_message == true) {
+		CHARGER_DATA[0] = (uint8_t)((manual_balancing_config.charge_voltage >> 8) & 0xFF);
+		CHARGER_DATA[1] = (uint8_t)(manual_balancing_config.charge_voltage & 0xFF);
+		CHARGER_DATA[2] = (uint8_t)((manual_balancing_config.charge_current >> 8) & 0xFF);
+		CHARGER_DATA[3] = (uint8_t)(manual_balancing_config.charge_current & 0xFF);
+	}
+	else {
+		return;	// abort send
+	}
+
+    /* these data bytes are not used */
+	CHARGER_DATA[4] = 0x00;
+	CHARGER_DATA[5] = 0x00;
+	CHARGER_DATA[6] = 0x00;
+	CHARGER_DATA[7] = 0x00;
+
+    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CHARGER_DATA, &TxMailbox);
+
+    // reset to normal
+	TxHeader.StdId = 0;  // Set to 0 for extended IDs
+	TxHeader.ExtId = 0; // Set your 29-bit ID
+	TxHeader.DLC = 8;				// set command length
+	TxHeader.IDE = CAN_ID_STD;       // Set to extended ID
+}
+
+// reset all variables to default
+void resetChargerVariables() {
+	manual_balancing_config.charge_en = false;		// disable charge
+	manual_balancing_config.charge_voltage = 6000;	// 600V
+	manual_balancing_config.charge_current = 0;		// 0A
+
+	manual_balancing_config.discharge_balance_en = false;	// disable discharge balance
+	manual_balancing_config.num_cells_discharged_per_secondary = 0;	// no cells to be discharged
+	manual_balancing_config.discharge_threshold_voltage = 41600;	// 4.16V
+
+	manual_balancing_config.valid_charge_message = false;	// assume invalid message
+}
+
+void getLaptopCanMessage(){
+  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData);
+
   if (RxHeader.StdId == POLLING_ID) {
     pollingFlag = true;
   }
 
+  switch (RxHeader.StdId) {
+	  case MANUAL_BALANCING_ID: // insert laptop to charger can id here
+		  manual_balancing_config.charge_en = (RxData[0] == 0xFF);
+		  manual_balancing_config.charge_voltage = ((RxData[1] << 8) | (RxData[2]));
+		  manual_balancing_config.charge_current = ((RxData[3] << 8) | (RxData[4]));
+
+		  manual_balancing_config.discharge_balance_en = (RxData[5] & 0xF0) == 0xF0;
+		  manual_balancing_config.num_cells_discharged_per_secondary = (RxData[5] & 0x0F);
+		  manual_balancing_config.discharge_threshold_voltage = ((RxData[6] << 8) | (RxData[7]));
+
+		  // check for validity
+
+		  // if both charge and balance are enabled, invalid message
+		  if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.discharge_balance_en == true)) {
+			  manual_balancing_config.valid_charge_message = false;
+			  resetChargerVariables();
+			  break;
+		  }
+
+		  // if charge is enabled AND if charge voltage is out of bounds [500-600][V]
+		  // multiplied by 10 -> [5000 - 6000]
+		  if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_voltage < 5000) || (manual_balancing_config.charge_voltage > 6000))) {
+			  manual_balancing_config.valid_charge_message = false;
+			  resetChargerVariables();
+			  break;
+		  }
+
+		  // if charge is enabled AND if charge current is out of bounds [0-10][A]
+		  // multiplied by 10 -> [0 - 100]
+		  if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_current < 0) || (manual_balancing_config.charge_current > 100))) {
+			  manual_balancing_config.valid_charge_message = false;
+			  resetChargerVariables();
+			  break;
+		  }
+
+		  // if cell discharge count is out of bounds
+		  if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.num_cells_discharged_per_secondary < 0) || (manual_balancing_config.num_cells_discharged_per_secondary > 12))) {
+			  manual_balancing_config.valid_charge_message = false;
+			  resetChargerVariables();
+			  break;
+		  }
+
+		  // if discharge is enabled AND if discharge cell threshold is out of bounds [3.2-4.2][V]
+		  // multiplied by 10,000 -> [32000 - 42000]
+		  if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.discharge_threshold_voltage < 32000) || (manual_balancing_config.discharge_threshold_voltage > 42000))) {
+			  manual_balancing_config.valid_charge_message = false;
+			  resetChargerVariables();
+			  break;
+		  }
+
+		  // if all conditions passed, charge message is true
+		  manual_balancing_config.valid_charge_message = true;
+		  charging_counter++;
+		  break;
+
+	  default:
+		  break;
+  }
+
+}
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
 }
 
 

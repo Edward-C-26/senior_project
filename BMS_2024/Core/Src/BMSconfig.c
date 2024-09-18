@@ -56,7 +56,7 @@ void loadConfig(BMSConfigStructTypedef* cfg) {
 
 	cfg->invalidPECcount = 5;
 
-	cfg->dischargeTime = 250;  // ms
+	cfg->dischargeTime = 1500;  // ms
 
 	// cfg->normalCurrent = 0xA;
 	// cfg->lowerCurrent = 0x5;
