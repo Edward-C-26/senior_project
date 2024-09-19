@@ -1,0 +1,2 @@
+../Core/Src/Fault.c:12:6:init_BMS_info	0	static
+../Core/Src/Fault.c:56:6:FAULT_check	8	static
