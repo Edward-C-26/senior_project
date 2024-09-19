@@ -1,2 +1,0 @@
-../Core/Src/SPI.c:7:6:SPIWrite	32	dynamic
-../Core/Src/SPI.c:25:6:SPIWriteRead	32	static
