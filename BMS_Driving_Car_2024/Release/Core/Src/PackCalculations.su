@@ -1,3 +1,0 @@
-../Core/Src/PackCalculations.c:13:6:setCriticalVoltages	32	static
-../Core/Src/PackCalculations.c:64:6:setCriticalTemps	20	static
-../Core/Src/PackCalculations.c:90:6:balance	48	static
