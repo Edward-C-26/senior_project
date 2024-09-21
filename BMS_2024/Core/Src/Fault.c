@@ -37,13 +37,13 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
 
     // Init other readings
     bms_struct->invalid_data = false;
-    bms_struct->invalid_data_cell = -1;
+    bms_struct->invalid_data_cell = 255;
 
     bms_struct->cell_connection_fault = false;
-    bms_struct->cell_connection_num = -1;
+    bms_struct->cell_connection_num = 255;
 
     bms_struct->is_fault = false;
-    bms_struct->fault_board_num = -1;
+    bms_struct->fault_board_num = 255;
     
 }
 

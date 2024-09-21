@@ -7,7 +7,7 @@
 void loadConfig(BMSConfigStructTypedef* cfg) {
 	// change this
 	cfg->numOfICs = 12;
-	for (int i = 0; i < 12; i++) {
+	for (uint8_t i = 0; i < 12; i++) {
 		cfg->address[i] = i;
 	}
 	// cfg->address[0] = 0;

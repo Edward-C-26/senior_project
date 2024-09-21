@@ -77,3 +77,6 @@ Debug/
 # STM32 git ignore
 *.mxproject
 
+# Output Files
+*.o
+
