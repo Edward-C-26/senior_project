@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-// uint8_t aaronz4_arnavs10 = 1;
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
