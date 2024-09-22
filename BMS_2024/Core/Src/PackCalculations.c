@@ -2,7 +2,6 @@
  * Last Edited Spring 2024 : David Lacayo
 */
 #include "PackCalculations.h"
-uint8_t david = 0;
 
 //! \brief This method calculates the maximum and minimum cell voltages in the pack, and sets those values w/ the associated
 //      cell number to the bms critical info struct
