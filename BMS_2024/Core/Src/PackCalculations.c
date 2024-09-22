@@ -3,6 +3,7 @@
 */
 #include "PackCalculations.h"
 uint8_t yiqing10 = 0;
+uint8_t swethak2 = 2; 
 
 //! \brief This method calculates the maximum and minimum cell voltages in the pack, and sets those values w/ the associated
 //      cell number to the bms critical info struct
