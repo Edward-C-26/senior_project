@@ -56,6 +56,13 @@ typedef struct {
 
 } BMSConfigStructTypedef;
 
+typedef struct {
+    uint8_t index;
+    uint8_t fault;
+    uint16_t voltage;
+    uint16_t temperature;
+} CellData;
+
 void loadConfig(BMSConfigStructTypedef* config);
 
 #endif	// BMS_CONFIG_H

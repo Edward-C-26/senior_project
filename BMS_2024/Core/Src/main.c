@@ -92,7 +92,7 @@ bool BMS_FAULT = 0;
 uint16_t *buff_2949;
 bool ret_2949;
 
-uint8_t BMS_DATA[144][6];
+CellData BMS_DATA[144];
 uint8_t BMS_STATUS[6];
 uint8_t CELLVAL_DATA[6];
 bool discharge[12][12];
@@ -111,7 +111,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void setChargerTxData(BMSConfigStructTypedef cfg);
-void CELLVAL_message(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]);
+void CELLVAL_message(BMSConfigStructTypedef cfg, CellData bmsData[144]);
 void BMSSTAT_message(BMSConfigStructTypedef cfg, uint8_t bmsStatus[6]);
 void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms);
 void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool BMS_FAULT);
@@ -665,7 +665,7 @@ void setChargerTxData(BMSConfigStructTypedef cfg) {
     HAL_CAN_AddTxMessage(&hcan1, &ChargerTxHeader, ChargerTxData, &TxMailbox);
 }
 
-void CELLVAL_message(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
+void CELLVAL_message(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
     // canCounter1++;
     TxHeader.StdId = CELLVAL_ID;
     TxHeader.DLC = 6;
@@ -674,7 +674,7 @@ void CELLVAL_message(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
     //Send dummy CAN message to wake up bus
 
 
-    CELLVAL_DATA[0] = 0;
+    CELLVAL_DATA[0] = 0; // Should not  be a CELL_VAL message. Let's add a wake ID instead
     CELLVAL_DATA[1] = 0;
     CELLVAL_DATA[2] = 0;
     CELLVAL_DATA[3] = 0;
@@ -688,12 +688,12 @@ void CELLVAL_message(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 
     //replace with memcopy?
     for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-        CELLVAL_DATA[0] = bmsData[cell][0];
-        CELLVAL_DATA[1] = bmsData[cell][1];
-        CELLVAL_DATA[2] = bmsData[cell][2];
-        CELLVAL_DATA[3] = bmsData[cell][3];
-        CELLVAL_DATA[4] = bmsData[cell][4];
-        CELLVAL_DATA[5] = bmsData[cell][5];
+        CELLVAL_DATA[0] = bmsData[cell].index;
+        CELLVAL_DATA[1] = bmsData[cell].fault;
+        CELLVAL_DATA[2] = (uint8_t) (bmsData[cell].voltage >> 8);
+        CELLVAL_DATA[3] = (uint8_t)(bmsData[cell].voltage & 0xFF);
+        CELLVAL_DATA[4] = (uint8_t) (bmsData[cell].temperature >> 8);
+        CELLVAL_DATA[5] = (uint8_t)(bmsData[cell].temperature & 0xFF);
 
         HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CELLVAL_DATA, &TxMailbox);
         HAL_Delay(1);

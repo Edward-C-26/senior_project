@@ -7,9 +7,9 @@
 //      cell number to the bms critical info struct
 //! \param cfg is the bms configuration file with constants used in our bms system
 //! \param bms is the bms struct that contains critical info regarding our pack 
-//! \param bmsData is the 2D array that stores the data for each of the cells in our pack
+//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! \returns none 
-void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsData[144][6]) {
+void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144]) {
     uint16_t maxCellVoltage;
     uint16_t minCellVoltage;
     uint16_t cellVoltage;
@@ -23,7 +23,7 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
     	//First two is due to fucky cell voltages, unsure about 0 -> for sume reason cellVoltage goes to 1027?
 
-    	cellVoltage = (((uint16_t)bmsData[cell][2]) << 8 | (uint16_t)bmsData[cell][3]);
+    	cellVoltage = bmsData[cell].voltage;
 
     	totalVoltage += (cellVoltage/1000);
 
@@ -58,9 +58,9 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 //      cell number to the bms critical info struct
 //! \param cfg is the bms configuration file with constants used in our bms system
 //! \param bms is the bms struct that contains critical info regarding our pack 
-//! \param bmsData is the 2D array that stores the data for each of the cells in our pack
+//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! \returns none 
-void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsData[144][6]) {
+void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144]) {
 	 	uint16_t maxCellTemp;
 	    uint16_t minCellTemp;
 	    uint16_t cellTemp;
@@ -69,7 +69,7 @@ void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uin
 		bms->curr_max_temp = 0;
 	
 	    for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-	    	cellTemp = (((uint16_t)bmsData[cell][4]) << 8 | (uint16_t)bmsData[cell][5]);
+	    	cellTemp = bmsData[cell].temperature;
 	    	maxCellTemp = bms->curr_max_temp;
 	    	if(cellTemp > maxCellTemp){
 	    	   bms->curr_max_temp = cellTemp;
@@ -86,7 +86,7 @@ void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uin
 }
 
 //! \brief This function is still a work in progress
-void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsData[144][6], bool cellDischarge[12][12], bool fullDischarge[12][12], uint8_t balanceCounter, uint8_t chargeRate) {
+void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144], bool cellDischarge[12][12], bool fullDischarge[12][12], uint8_t balanceCounter, uint8_t chargeRate) {
 	uint16_t maxCellVoltage = bms->curr_max_voltage;
 //	uint16_t minCellVoltage = bms.curr_min_voltage;
 	uint16_t cellVoltage = 0;
@@ -95,7 +95,7 @@ void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsD
 	if ((maxCellVoltage > cfg->balancing_start_threshold)) {  // if cell voltage in range, balance cells
 		for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
 
-			cellVoltage = (((uint16_t)bmsData[cell][2]) << 8 | (uint16_t)bmsData[cell][3]);
+			cellVoltage = bmsData[cell].voltage;
 
 			differenceVoltage = cellVoltage - cfg->balancing_start_threshold;
 			if(differenceVoltage < 0) continue;	//For case where cell is not a "Top" (maximum)
@@ -104,7 +104,7 @@ void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, uint8_t bmsD
 			if (cellVoltage > cfg->stopCharge_threshold && cellVoltage != 65535) {  // if voltage is above charge threshold(and not a garbage value), turn off charger
 				chargeRate = 0;
 				fullDischarge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 1;
-				bmsData[cell][1] &= 0x1F;  // set charge rate to 0
+				bmsData[cell].fault &= 0x1F;  // set charge rate to 0
 			} else if (cell % 12 == balanceCounter && differenceVoltage > cfg->balancing_difference) {
 				cellDischarge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 1;
 

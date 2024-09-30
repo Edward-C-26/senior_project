@@ -50,10 +50,10 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
 
 //! \brief This method checks for valid data as well as cell connection, OT, UT, OV, & UT faults
 //! \param cfg is the configuration struct for constants and readings
-//! \param bmsData is a 2D array of 144 cells, each with 6 bytes of info (partaining to cell #, fault, voltage & temp) 
+//! \param bmsData is a 2D array of 144 cellData, containing voltage, temperature and index
 //! \param bmsStatus is an array that keeps track of BMS Fault information that will be returned over CAN
 //! \returns true if there is a BMS fault, and false if the system has returned no faults
-bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, uint8_t bmsData[144][6], uint8_t bmsStatus[6]) {
+bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, CellData bmsData[144], uint8_t bmsStatus[6]) {
       bool BMS_fault = false;
 
 

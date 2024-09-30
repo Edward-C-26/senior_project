@@ -158,9 +158,9 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 //! \brief This function reads all cell voltages by essentially parsing each board and reading the individual cell voltages. These are then 
 //		stored in the bmsData array, along with the cell number that is associated with the reading. 
 //! \param cfg is the BMS configuration struct with constants 
-//! \param bmsData is the 2D array that stores all cell data for voltages, temperatures, faults, and cell number 
+//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! \returns true if no PEC for any register read for any board 
-bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
+bool readAllCellVoltages(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
 	// DEAR WHOEVER READS/ RUNS THIS CODE
 	// DO NOT BREAKPOINT HERE UNLESS YOU WANT TO GOOF TIMING UP
 	uint16_t boardVoltage[12];
@@ -190,14 +190,12 @@ bool readAllCellVoltages(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 
 		// store cell number and valid data bit in bmsData
 		for (uint8_t cell = 0; cell < NUM_BOARDS; cell++) {
-			bmsData[(board * NUM_BOARDS) + cell][0] = (uint8_t)((board * NUM_BOARDS) + cell + 1);  // cell number
-			bmsData[(board * NUM_BOARDS) + cell][1] = 0;										   // clear status byte
+			bmsData[(board * NUM_BOARDS) + cell].voltage = (uint8_t)((board * NUM_BOARDS) + cell + 1);  // cell number
 
 			if (PEC_check[board])
-				bmsData[(board * NUM_BOARDS) + cell][1] |= 0b00000010;	// set valid data bit
+				bmsData[(board * NUM_BOARDS) + cell].fault |= 0b00000010;	// set valid data bit
 
-			bmsData[(board * NUM_BOARDS) + cell][2] = (uint8_t)((boardVoltage[cell] >> 8) & 0xFF);
-			bmsData[(board * NUM_BOARDS) + cell][3] = (uint8_t)(boardVoltage[cell] & 0xFF);
+			bmsData[(board * NUM_BOARDS) + cell].voltage = boardVoltage[cell];
 		}
 	}
 
@@ -257,9 +255,9 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 
 //! \brief This function reads cell temps from all of our board by calling readCellTemp for each board. NOTE : This is not proven to work properly yet.
 //! \param cfg is the configuration struct for BMS with all of the constants used 
-//! \param bmsData is the 2D array where we track the data of each cell in our pack 
+//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! \returns true if PEC value received matches expected PEC value. Otherwise, false. -> i.e., returns false if any readCellTemp return values are false. 
-bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
+bool readAllCellTemps(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
 	uint16_t boardTemp[4];
 	bool boardDCFault[4];
 	bool boardTempFault[4];
@@ -284,16 +282,15 @@ bool readAllCellTemps(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
 		// store OT and temp DC bits in status byte
 		for (uint8_t cell = 0; cell < 12; cell++) {
 			if (PEC_check[board])
-				bmsData[(board * 12) + cell][1] |= 0b00000010;	// set valid data bit
+				bmsData[(board * 12) + cell].fault |= 0b00000010;	// set valid data bit
 
 			if (boardTempFault[cell / 3])
-				bmsData[(board * 12) + cell][1] |= 0b00010000;	// set OT bit
+				bmsData[(board * 12) + cell].fault |= 0b00010000;	// set OT bit
 
 			if (boardDCFault[cell / 3])
-				bmsData[(board * 12) + cell][1] |= 0b00001000;	// set temp DC bit
+				bmsData[(board * 12) + cell].fault |= 0b00001000;	// set temp DC bit
 
-			bmsData[(board * 12) + cell][4] = (uint8_t)((boardTemp[cell / 3] >> 8) & 0xFF);
-			bmsData[(board * 12) + cell][5] = (uint8_t)(boardTemp[cell / 3] & 0xFF);
+			bmsData[(board * 12) + cell].temperature = boardTemp[cell / 3];
 		}
 	}
 
@@ -330,9 +327,9 @@ bool readConfig(uint8_t address, uint8_t cfg[8]) {
 //			this function compares previously measured values to open wire check values, and if 
 //				there is a significant drop in voltage, cell is allegedly disconnected. 
 //! \param cfg is the BMS configuration struct with constants 
-//! \param bmsData is a 2D array of 144 cells x 6 readings that stores our cell data throughout the system
+//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! \returns true is the cell is connnected properly, and false if the cell is "disconnected"
-bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]) {
+bool checkAllCellConnections(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
 	uint16_t ADOWvoltage[cfg.numOfCellInputs];
 	uint16_t cellVoltage;
 	bool PEC_check[12];
@@ -363,12 +360,10 @@ bool checkAllCellConnections(BMSConfigStructTypedef cfg, uint8_t bmsData[144][6]
 		ADOWvoltage[7] = ADOWvoltage[9];
 
 		for (uint8_t cell = 0; cell < cfg.numOfCellsPerIC; cell++) {
-			cellVoltage = (uint16_t)(bmsData[(board * cfg.numOfCellsPerIC) + cell][2]);
-			cellVoltage <<= 8;
-			cellVoltage += (uint16_t)(bmsData[(board * cfg.numOfCellsPerIC) + cell][3]);
+			cellVoltage = bmsData[(board * cfg.numOfCellsPerIC) + cell].voltage;
 
 			if ((cellVoltage - ADOWvoltage[cell]) < 1000) {
-				bmsData[(board * cfg.numOfCellsPerIC) + cell][1] |= 0b00000001;	 // negligible drop in voltage, so cell is connected
+                    bmsData[(board * cfg.numOfCellsPerIC) + cell].fault |= 0b00000001;	 // negligible drop in voltage, so cell is connected
 			}
 		}
 	}
