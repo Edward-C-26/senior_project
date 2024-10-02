@@ -53,6 +53,7 @@
 #define CONSTANT_CAN_ENABLE 1
 
 #define BALANCE_EN  0
+#define CHARGE_EN 1
 
 /* USER CODE END PD */
 
@@ -86,18 +87,16 @@ uint8_t charge_rate = 2;
 uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
 
-bool CHARGE_EN = 1;
-bool BMS_FAULT = 0;
+bool bmsFault = 0;
 
 uint16_t *buff_2949;
 bool ret_2949;
 
-CellData BMS_DATA[144];
+CellData bmsData[144];
 uint8_t BMS_STATUS[6];
-uint8_t CELLVAL_DATA[6];
 bool discharge[12][12];
 bool full_discharge[12][12];
-
+bool pollingFlag = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,14 +109,13 @@ static void MX_SPI3_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-void setChargerTxData(BMSConfigStructTypedef cfg);
-void CELLVAL_message(BMSConfigStructTypedef cfg, CellData bmsData[144]);
-void BMSSTAT_message(BMSConfigStructTypedef cfg, uint8_t bmsStatus[6]);
-void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms);
-void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool BMS_FAULT);
+static void setChargerTxData(BMSConfigStructTypedef cfg);
+static void CELLVAL_message(CellData const bmsData[144]);
+static void BMSSTAT_message(uint8_t const bmsStatus[6]);
+static void BMSVINF_message(BMS_critical_info_t const *bms);
+static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault);
 // void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]); // old method 
-void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms); // draft :D
-bool pollingFlag = false;
+static void PACKSTAT_message(BMS_critical_info_t const *bms); // draft :D
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -170,7 +168,6 @@ int main(void)
     HAL_CAN_Start(&hcan1);
 
   /* USER CODE END 2 */
-  uint16_t adi = 0;
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -178,7 +175,6 @@ int main(void)
     {
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
-    	adi++;
     	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
     	TIM2 -> CCR2 = 50;
 
@@ -192,36 +188,38 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-        readAllCellVoltages(BMSConfig, BMS_DATA);
-        setCriticalVoltages(&BMSConfig, &BMSCriticalInfo, BMS_DATA);
+        readAllCellVoltages(bmsData);
+        setCriticalVoltages(&BMSCriticalInfo, bmsData);
 
 
-        // Read all Temps from LTC6811, store them in 144x6 array, set the critical info struct, then send temp info over CAN
-        readAllCellTemps(BMSConfig, BMS_DATA);
+        // Read all Temps from LTC6811, store them in 144x6 array,
+        // set the critical info struct, then send temp info over CAN
+        readAllCellTemps(BMSConfig, bmsData);
 
-        setCriticalTemps(&BMSConfig, &BMSCriticalInfo, BMS_DATA);
-
-
-
-
+        setCriticalTemps(&BMSCriticalInfo, bmsData);
 
         // Check cell connections -> not sure if this works -_-
-        checkAllCellConnections(BMSConfig, BMS_DATA);
+        checkAllCellConnections(BMSConfig, bmsData);
 
-        BMSConfig.UV_threshold = (CHARGE_EN == 0) ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
+        BMSConfig.UV_threshold = (CHARGE_EN == 0) 
+            ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
 
 
-        /* DO THIS WHEN TESTING BMS FAULTS*/    //*NOTE* : need to figure out which pin is the BMS fault pin
-         bool BMS_FAULT = FAULT_check(&BMSConfig, &BMSCriticalInfo, BMS_DATA, BMS_STATUS);
-         if (BMS_FAULT == false) {
+        /* DO THIS WHEN TESTING BMS FAULTS*/    
+        //*NOTE* : need to figure out which pin is the BMS fault pin
+         bool bmsFault = FAULT_check(&BMSConfig, &BMSCriticalInfo, 
+                 bmsData, BMS_STATUS);
+         if (bmsFault == false) {
         	 global_error_count = 0;
-        	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_RESET);
+        	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
+                     GPIO_PIN_RESET);
          }
          else {
          	global_error_count++;
          	if (global_error_count == 1) {
          		global_error_count = 0;
-         		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_SET);
+         		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
+                        GPIO_PIN_SET);
              }
          }
 
@@ -229,7 +227,8 @@ int main(void)
         // TODO: make no balance when bms fault
         if(CHARGE_EN == 0 && BALANCE_EN == 1) {
             if(charge_rate != 0) {
-                balance(&BMSConfig, &BMSCriticalInfo, BMS_DATA, discharge, full_discharge, balance_counter, charge_rate);
+                balance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge,
+                        full_discharge, balance_counter, &charge_rate);
 
                 if(balance_counter == 12) {
                     balance_counter = 0;
@@ -241,21 +240,22 @@ int main(void)
                 dischargeCellGroups(&BMSConfig, discharge);
                 HAL_Delay(BMSConfig.dischargeTime);
             } else {
-                // checkDischarge(BMSConfig, full_discharge, BMS_DATA); // not anywhere in past code??? WTF
+                // checkDischarge(BMSConfig, full_discharge, bmsData);
+                // not anywhere in past code??? WTF
                 dischargeCellGroups(&BMSConfig, full_discharge);
                 HAL_Delay(BMSConfig.dischargeTime);
             }
         }
 
         // Send remaining CAN messages
-        BMSVINF_message(BMSConfig, BMSCriticalInfo);    
-        BMSTINF_message(BMSConfig, BMSCriticalInfo, BMS_FAULT);
-        PACKSTAT_message(BMSConfig, BMSCriticalInfo);
-        BMSSTAT_message(BMSConfig, BMS_STATUS);
-        PACKSTAT_message(BMSConfig, BMSCriticalInfo);
+        BMSVINF_message(&BMSCriticalInfo);    
+        BMSTINF_message(&BMSCriticalInfo, bmsFault);
+        PACKSTAT_message(&BMSCriticalInfo);
+        BMSSTAT_message(BMS_STATUS);
+        PACKSTAT_message(&BMSCriticalInfo);
 
       if (pollingFlag || CONSTANT_CAN_ENABLE){
-        CELLVAL_message(BMSConfig, BMS_DATA);
+        CELLVAL_message(bmsData);
         pollingFlag = false;
       }
     }
@@ -665,15 +665,14 @@ void setChargerTxData(BMSConfigStructTypedef cfg) {
     HAL_CAN_AddTxMessage(&hcan1, &ChargerTxHeader, ChargerTxData, &TxMailbox);
 }
 
-void CELLVAL_message(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
+static void CELLVAL_message(CellData const bmsData[144]) {
     // canCounter1++;
     TxHeader.StdId = CELLVAL_ID;
     TxHeader.DLC = 6;
 
-
     //Send dummy CAN message to wake up bus
 
-
+    uint8_t CELLVAL_DATA[6];
     CELLVAL_DATA[0] = 0; // Should not  be a CELL_VAL message. Let's add a wake ID instead
     CELLVAL_DATA[1] = 0;
     CELLVAL_DATA[2] = 0;
@@ -696,11 +695,11 @@ void CELLVAL_message(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
         CELLVAL_DATA[5] = (uint8_t)(bmsData[cell].temperature & 0xFF);
 
         HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CELLVAL_DATA, &TxMailbox);
-        HAL_Delay(1);
+        HAL_Delay(1); // TODO: 144ms delay
     }
 }
 
-void BMSSTAT_message(BMSConfigStructTypedef cfg, uint8_t bmsStatus[6]) {
+static void BMSSTAT_message(uint8_t const bmsStatus[6]) {
     // canCounter2++;
 
     TxHeader.StdId = BMSSTAT_ID;
@@ -709,11 +708,11 @@ void BMSSTAT_message(BMSConfigStructTypedef cfg, uint8_t bmsStatus[6]) {
     HAL_CAN_AddTxMessage(&hcan1, &TxHeader, bmsStatus, &TxMailbox);
 }
 
-void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
-    uint16_t minV = bms.curr_min_voltage;
-    uint8_t minCell = bms.min_volt_cell;
-    uint16_t maxV = bms.curr_max_voltage;
-    uint8_t maxCell = bms.max_volt_cell;
+static void BMSVINF_message(BMS_critical_info_t const *bms) {
+    const uint16_t minV = bms->curr_min_voltage;
+    const uint8_t minCell = bms->min_volt_cell;
+    const uint16_t maxV = bms->curr_max_voltage;
+    const uint8_t maxCell = bms->max_volt_cell;
 
 
     TxHeader.StdId = BMSVINF_ID;
@@ -732,11 +731,11 @@ void BMSVINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
     HAL_CAN_AddTxMessage(&hcan1, &TxHeader, BMSVINF_DATA, &TxMailbox);  
 }
 
-void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool BMS_FAULT) {
-    uint16_t minT = bms.curr_min_temp;
-    uint8_t minCell = bms.min_temp_cell;
-    uint16_t maxT = bms.curr_max_temp;
-    uint8_t maxCell = bms.max_temp_cell;
+static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
+    const uint16_t minT = bms->curr_min_temp;
+    const uint8_t minCell = bms->min_temp_cell;
+    const uint16_t maxT = bms->curr_max_temp;
+    const uint8_t maxCell = bms->max_temp_cell;
 
     // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC)); //bug -> we only take 4 readings per board for temperatures
     // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC));
@@ -757,7 +756,7 @@ void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool B
     HAL_CAN_AddTxMessage(&hcan1, &TxHeader, BMSTINF_DATA, &TxMailbox);
 
     // Insert PWM code
-    if ((maxT < 17400) || BMS_FAULT) {
+    if ((maxT < 17400) || bmsFault) {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
     } else {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
@@ -765,14 +764,14 @@ void BMSTINF_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, bool B
     }
 }
 
-void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms) {
+static void PACKSTAT_message(BMS_critical_info_t const *bms) {
     TxHeader.StdId = PACKSTAT_ID;
     TxHeader.DLC = 6;
     uint8_t PACKSTAT_DATA[6];
 
-    uint16_t pack_voltage = bms.packVoltage;
-    uint16_t pack_current = bms.packCurrent;
-    uint16_t pack_power = bms.packPower;
+    const uint16_t pack_voltage = bms->packVoltage;
+    const uint16_t pack_current = bms->packCurrent;
+    const uint16_t pack_power = bms->packPower;
 
     PACKSTAT_DATA[0] = (uint8_t)((pack_voltage >> 8) & 0xFF);
     PACKSTAT_DATA[1] = (uint8_t)(pack_voltage & 0xFF);

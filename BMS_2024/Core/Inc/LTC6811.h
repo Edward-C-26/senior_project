@@ -43,7 +43,7 @@ void initPECTable(void);
 void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address);
 void writeConfigAll(BMSConfigStructTypedef *cfg);
 bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]);
-bool readAllCellVoltages(BMSConfigStructTypedef cfg, CellData bmsData[144]);
+bool readAllCellVoltages(CellData bmsData[144]);
 bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool tempFault[4]);
 bool readAllCellTemps(BMSConfigStructTypedef cfg, CellData bmsData[144]);
 // bool checkCellConnection(uint16_t cellVoltage[12], bool cellConnection[12]);

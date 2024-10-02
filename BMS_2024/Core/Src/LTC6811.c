@@ -160,7 +160,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 //! \param cfg is the BMS configuration struct with constants 
 //! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! \returns true if no PEC for any register read for any board 
-bool readAllCellVoltages(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
+bool readAllCellVoltages(CellData bmsData[144]) {
 	// DEAR WHOEVER READS/ RUNS THIS CODE
 	// DO NOT BREAKPOINT HERE UNLESS YOU WANT TO GOOF TIMING UP
 	uint16_t boardVoltage[12];

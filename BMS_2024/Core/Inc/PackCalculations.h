@@ -8,8 +8,12 @@
 
 #define MAXINT16 65535
 
-void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144]);
-void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144]);
-void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144], bool cellDischarge[12][12], bool fullDischarge[12][12], uint8_t balanceCounter, uint8_t chargeRate);
+void setCriticalVoltages(BMS_critical_info_t *bms,
+        CellData const bmsData[144]);
+void setCriticalTemps(BMS_critical_info_t *bms, CellData const bmsData[144]);
+void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
+        CellData bmsData[144], bool cellDischarge[12][12],
+        bool fullDischarge[12][12], uint8_t balanceCounter,
+        uint8_t *chargeRate);
 
 #endif  // PACK_CALCULATIONS

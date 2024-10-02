@@ -3,13 +3,16 @@
 */
 #include "PackCalculations.h"
 
-//! \brief This method calculates the maximum and minimum cell voltages in the pack, and sets those values w/ the associated
-//      cell number to the bms critical info struct
-//! \param cfg is the bms configuration file with constants used in our bms system
+//! \brief This method calculates the maximum and minimum cell voltages in
+//      the pack, and sets those values w/ the associated cell number to the
+//      bms critical info struct
+//! \param cfg is the bms configuration file with constants used in our bms
 //! \param bms is the bms struct that contains critical info regarding our pack 
-//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
+//! \param bmsData is an array of 144 cellData structs, containing index, fault,
+//      voltage and temperature
 //! \returns none 
-void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144]) {
+void setCriticalVoltages(BMS_critical_info_t *bms,
+        CellData const bmsData[144]) {
     uint16_t maxCellVoltage;
     uint16_t minCellVoltage;
     uint16_t cellVoltage;
@@ -21,7 +24,8 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 	bms->curr_max_voltage = 0;
 
     for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-    	//First two is due to fucky cell voltages, unsure about 0 -> for sume reason cellVoltage goes to 1027?
+    	//First two is due to fucky cell voltages,
+        //unsure about 0 -> for sume reason cellVoltage goes to 1027?
 
     	cellVoltage = bmsData[cell].voltage;
 
@@ -30,7 +34,8 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
     	maxCellVoltage = bms->curr_max_voltage;
 
         // Check if cell readings is a max voltage or min voltage
-        if(cellVoltage > maxCellVoltage && cellVoltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {
+        if(cellVoltage > maxCellVoltage
+                && cellVoltage < INVALID_VOLTAGE_UPPER_THRESHOLD) {
             bms->curr_max_voltage = cellVoltage;
 			bms->max_volt_cell = cell;
         }
@@ -41,7 +46,8 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 
         minCellVoltage = bms->curr_min_voltage;
 
-        if((cellVoltage < minCellVoltage || minCellVoltage == 0) && cellVoltage > INVALID_VOLTAGE_LOWER_THRESHOLD) {
+        if((cellVoltage < minCellVoltage || minCellVoltage == 0)
+                && cellVoltage > INVALID_VOLTAGE_LOWER_THRESHOLD) {
             bms->curr_min_voltage = cellVoltage;
 			bms->min_volt_cell = cell;
         }
@@ -54,13 +60,15 @@ void setCriticalVoltages(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, 
 }
 
 
-//! \brief This method calculates the maximum and minimum cell temps in the pack, and sets those values w/ the associated
-//      cell number to the bms critical info struct
-//! \param cfg is the bms configuration file with constants used in our bms system
+//! \brief This method calculates the maximum and minimum cell temps in the
+//      pack, and sets those values w/ the associated cell number to the bms
+//      critical info struct
+//! \param cfg is the bms configuration file with constants used in our bms
 //! \param bms is the bms struct that contains critical info regarding our pack 
-//! \param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
+//! \param bmsData is an array of 144 cellData structs, 
+//      containing index, fault, voltage and temperature
 //! \returns none 
-void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144]) {
+void setCriticalTemps(BMS_critical_info_t *bms, CellData const bmsData[144]) {
 	 	uint16_t maxCellTemp;
 	    uint16_t minCellTemp;
 	    uint16_t cellTemp;
@@ -86,30 +94,42 @@ void setCriticalTemps(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, Cel
 }
 
 //! \brief This function is still a work in progress
-void balance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms, CellData bmsData[144], bool cellDischarge[12][12], bool fullDischarge[12][12], uint8_t balanceCounter, uint8_t chargeRate) {
+void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
+        CellData bmsData[144], bool cellDischarge[12][12],
+        bool fullDischarge[12][12], uint8_t balanceCounter,
+        uint8_t *chargeRate) {
 	uint16_t maxCellVoltage = bms->curr_max_voltage;
 //	uint16_t minCellVoltage = bms.curr_min_voltage;
 	uint16_t cellVoltage = 0;
 	uint16_t differenceVoltage = 0;
 
-	if ((maxCellVoltage > cfg->balancing_start_threshold)) {  // if cell voltage in range, balance cells
+    // if cell voltage in range, balance cells
+	if ((maxCellVoltage > cfg->balancing_start_threshold)) {  
 		for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
 
 			cellVoltage = bmsData[cell].voltage;
 
 			differenceVoltage = cellVoltage - cfg->balancing_start_threshold;
-			if(differenceVoltage < 0) continue;	//For case where cell is not a "Top" (maximum)
+
+            //For case where cell is not a "Top" (maximum)
+			if(differenceVoltage < 0) continue;	
 			
-			/*Unsure if this will work right now-- overall, structure is good, but actual balancing seems weird*/
-			if (cellVoltage > cfg->stopCharge_threshold && cellVoltage != 65535) {  // if voltage is above charge threshold(and not a garbage value), turn off charger
-				chargeRate = 0;
-				fullDischarge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 1;
-				bmsData[cell].fault &= 0x1F;  // set charge rate to 0
-			} else if (cell % 12 == balanceCounter && differenceVoltage > cfg->balancing_difference) {
-				cellDischarge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 1;
+            uint8_t moduleIndex = cell / cfg->numOfCellsPerIC;
+            uint8_t cellIndex = cell % cfg->numOfCellsPerIC;
+			/*Unsure if this will work right now-- overall, structure is good,
+             * but actual balancing seems weird*/
+			if (cellVoltage > cfg->stopCharge_threshold 
+                    && cellVoltage != 65535) {
+            // if voltage is above charge threshold(and not a garbage value), 
+            // turn off charger
+				*chargeRate = 0;
+				fullDischarge[moduleIndex][cellIndex] = 1;
+			} else if (cell % 12 == balanceCounter 
+                    && differenceVoltage > cfg->balancing_difference) {
+				cellDischarge[moduleIndex][cellIndex] = 1;
 
 			} else {
-				cellDischarge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 0;
+				cellDischarge[moduleIndex][cellIndex] = 0;
 			}
 		}
 	}
