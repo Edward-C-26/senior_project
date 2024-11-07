@@ -687,7 +687,7 @@ static void CELLVAL_message(CellData const bmsData[144]) {
 
     //replace with memcopy?
     for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-        CELLVAL_DATA[0] = bmsData[cell].index;
+        CELLVAL_DATA[0] = cell;
         CELLVAL_DATA[1] = bmsData[cell].fault;
         CELLVAL_DATA[2] = (uint8_t) (bmsData[cell].voltage >> 8);
         CELLVAL_DATA[3] = (uint8_t)(bmsData[cell].voltage & 0xFF);
