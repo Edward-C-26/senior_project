@@ -166,7 +166,7 @@ void testCellBalance() {
     BMSConfigStructTypedef config;
     BMS_critical_info_t criticalInfo;
     loadConfig(&config);
-    init_BMS_info(&criticalInfo, &config);
+    init_BMS_info(&criticalInfo);
     bool cellDischarge[12][12];
     bool fullDischarge[12][12];
     uint8_t balanceCounter = 0;

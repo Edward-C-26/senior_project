@@ -45,7 +45,7 @@ typedef struct {
 
 } BMS_critical_info_t;
 
-void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cfg);
-bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, CellData bmsData[144], uint8_t bmsStatus[6]);
+void init_BMS_info(BMS_critical_info_t * bms_struct);
+bool FAULT_check(BMS_critical_info_t *bms_struct, uint8_t bmsStatus[6]);
 
 #endif //FAULT_H

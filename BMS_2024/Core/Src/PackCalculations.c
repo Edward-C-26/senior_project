@@ -101,7 +101,7 @@ void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
 	uint16_t maxCellVoltage = bms->curr_max_voltage;
 //	uint16_t minCellVoltage = bms.curr_min_voltage;
 	uint16_t cellVoltage = 0;
-	uint16_t differenceVoltage = 0;
+	int32_t differenceVoltage = 0;
 
     // if cell voltage in range, balance cells
 	if ((maxCellVoltage > cfg->balancing_start_threshold)) {  
@@ -109,7 +109,7 @@ void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
 
 			cellVoltage = bmsData[cell].voltage;
 
-			differenceVoltage = cellVoltage - cfg->balancing_start_threshold;
+			differenceVoltage = (int32_t) cellVoltage - cfg->balancing_start_threshold;
 
             //For case where cell is not a "Top" (maximum)
 			if(differenceVoltage < 0) continue;	

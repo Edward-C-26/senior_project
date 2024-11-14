@@ -87,6 +87,7 @@ CAN_RxHeaderTypeDef RxHeader;
 uint8_t TxData[8];
 uint8_t RxData[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint32_t TxMailbox;
+const uint32_t CAN_TX_TIMEOUT = 1 << 20; // Needs to be used along with microsecond delay
 
 CAN_TxHeaderTypeDef ChargerTxHeader;
 uint8_t ChargerTxData[8];
@@ -121,6 +122,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 static void setChargerTxData(BMSConfigStructTypedef cfg);
+static void TransmitCanMessage(const CAN_TxHeaderTypeDef *txHeader, uint8_t const *msgData);
 static void CELLVAL_message(CellData const bmsData[144]);
 static void BMSSTAT_message(uint8_t const bmsStatus[6]);
 static void BMSVINF_message(BMS_critical_info_t const *bms);
@@ -180,7 +182,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
     initPECTable();
     loadConfig(&BMSConfig);
-    init_BMS_info(&BMSCriticalInfo, &BMSConfig);
+    init_BMS_info(&BMSCriticalInfo);
     resetChargerVariables();
 
     HAL_CAN_Start(&hcan1);
@@ -197,7 +199,6 @@ int main(void)
     	TIM2 -> CCR2 = 50;
 
         writeConfigAll(&BMSConfig);
-        HAL_Delay(50);	 // TODO: Why is this here?
 
         /** FUNCTION CALL OVERVIEW
          * First: Call read6811 -> Voltages, Temps on 6811
@@ -212,12 +213,9 @@ int main(void)
 
         // Read all Temps from LTC6811, store them in 144x6 array,
         // set the critical info struct, then send temp info over CAN
-        readAllCellTemps(BMSConfig, bmsData);
+        readAllCellTemps(bmsData);
 
         setCriticalTemps(&BMSCriticalInfo, bmsData);
-
-        // Check cell connections -> not sure if this works -_-
-        checkAllCellConnections(BMSConfig, bmsData);
 
         BMSConfig.UV_threshold = (CHARGE_EN == 0) 
             ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
@@ -225,8 +223,7 @@ int main(void)
 
         /* DO THIS WHEN TESTING BMS FAULTS*/    
         //*NOTE* : need to figure out which pin is the BMS fault pin
-         bool bmsFault = FAULT_check(&BMSConfig, &BMSCriticalInfo, 
-                 bmsData, BMS_STATUS);
+         bool bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
          if (bmsFault == false) {
         	 global_error_count = 0;
         	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
@@ -234,7 +231,7 @@ int main(void)
          }
          else {
          	global_error_count++;
-         	if (global_error_count == 1) {
+         	if (global_error_count == 5) {
          		global_error_count = 0;
          		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
                         GPIO_PIN_SET);
@@ -713,6 +710,16 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+static void TransmitCanMessage(const CAN_TxHeaderTypeDef *txHeader, uint8_t const *msgData) {
+    for (uint32_t i = 0; i < CAN_TX_TIMEOUT; i++)  {
+        volatile uint32_t txMailboxFreeLevel = HAL_CAN_GetTxMailboxesFreeLevel(&hcan1);
+        if (txMailboxFreeLevel > 0) {
+            break;
+        }
+    }
+    HAL_CAN_AddTxMessage(&hcan1, txHeader, msgData, &TxMailbox);
+}
+
 void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
     ChargerTxHeader.StdId = CHARGER_OUT_ID;
     ChargerTxHeader.DLC = 8;
@@ -747,7 +754,7 @@ void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
     ChargerTxData[6] = 0x00;
     ChargerTxData[7] = 0x00;
 
-    HAL_CAN_AddTxMessage(&hcan1, &ChargerTxHeader, ChargerTxData, &TxMailbox);
+    TransmitCanMessage(&ChargerTxHeader, ChargerTxData);
 }
 
 static void CELLVAL_message(CellData const bmsData[144]) {
@@ -766,8 +773,7 @@ static void CELLVAL_message(CellData const bmsData[144]) {
     CELLVAL_DATA[5] = 0;
 
 
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CELLVAL_DATA, &TxMailbox);
-    HAL_Delay(1);
+    TransmitCanMessage(&TxHeader, CELLVAL_DATA);
 
 
     //replace with memcopy?
@@ -779,8 +785,7 @@ static void CELLVAL_message(CellData const bmsData[144]) {
         CELLVAL_DATA[4] = (uint8_t) (bmsData[cell].temperature >> 8);
         CELLVAL_DATA[5] = (uint8_t)(bmsData[cell].temperature & 0xFF);
 
-        HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CELLVAL_DATA, &TxMailbox);
-        HAL_Delay(1); // TODO: 144ms delay
+        TransmitCanMessage(&TxHeader, CELLVAL_DATA);
     }
 }
 
@@ -790,7 +795,7 @@ static void BMSSTAT_message(uint8_t const bmsStatus[6]) {
     TxHeader.StdId = BMSSTAT_ID;
     TxHeader.DLC = 6;
 
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, bmsStatus, &TxMailbox);
+    TransmitCanMessage(&TxHeader, bmsStatus);
 }
 
 static void BMSVINF_message(BMS_critical_info_t const *bms) {
@@ -813,7 +818,7 @@ static void BMSVINF_message(BMS_critical_info_t const *bms) {
     // BMSVINF_DATA[6] = (uint8_t)((averageV >> 8) & 0xFF);
     // BMSVINF_DATA[7] = (uint8_t)(averageV & 0xFF);
 
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, BMSVINF_DATA, &TxMailbox);  
+    TransmitCanMessage(&TxHeader, BMSVINF_DATA);  
 }
 
 static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
@@ -838,7 +843,7 @@ static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
     // BMSTINF_DATA[6] = (uint8_t)((averageT >> 8) & 0xFF);
     // BMSTINF_DATA[7] = (uint8_t)(averageT & 0xFF);
 
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, BMSTINF_DATA, &TxMailbox);
+    TransmitCanMessage(&TxHeader, BMSTINF_DATA);
 
     // Insert PWM code
     if ((maxT < 17400) || bmsFault) {
@@ -865,7 +870,7 @@ static void PACKSTAT_message(BMS_critical_info_t const *bms) {
     PACKSTAT_DATA[4] = (uint8_t)((pack_power >> 8) & 0xFF);
     PACKSTAT_DATA[5] = (uint8_t)(pack_power & 0xFF);
 
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, PACKSTAT_DATA, &TxMailbox);
+    TransmitCanMessage(&TxHeader, PACKSTAT_DATA);
 }
 
 void CHARGER_message() {
@@ -892,7 +897,7 @@ void CHARGER_message() {
 	CHARGER_DATA[6] = 0x00;
 	CHARGER_DATA[7] = 0x00;
 
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, CHARGER_DATA, &TxMailbox);
+    TransmitCanMessage(&TxHeader, CHARGER_DATA);
 
     // reset to normal
 	TxHeader.StdId = 0;  // Set to 0 for extended IDs
@@ -950,14 +955,14 @@ void getLaptopCanMessage(){
 
 		  // if charge is enabled AND if charge current is out of bounds [0-10][A]
 		  // multiplied by 10 -> [0 - 100]
-		  if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_current < 0) || (manual_balancing_config.charge_current > 100))) {
+		  if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.charge_current > 100)) {
 			  manual_balancing_config.valid_charge_message = false;
 			  resetChargerVariables();
 			  break;
 		  }
 
 		  // if cell discharge count is out of bounds
-		  if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.num_cells_discharged_per_secondary < 0) || (manual_balancing_config.num_cells_discharged_per_secondary > 12))) {
+		  if ((manual_balancing_config.discharge_balance_en == true) && (manual_balancing_config.num_cells_discharged_per_secondary > 12)) {
 			  manual_balancing_config.valid_charge_message = false;
 			  resetChargerVariables();
 			  break;
@@ -984,6 +989,7 @@ void getLaptopCanMessage(){
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
+    (void)hcan;
 }
 
 
@@ -1070,3 +1076,5 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+

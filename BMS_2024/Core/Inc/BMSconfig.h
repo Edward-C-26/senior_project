@@ -56,6 +56,11 @@ typedef struct {
 
 } BMSConfigStructTypedef;
 
+#define CELL_DISCONNECT_MASK (0x001)
+#define CELL_PEC_FAIL_MASK (0x01 << 1)
+#define CELL_DCFAULT_MASK (0x01 << 3)
+#define CELL_TEMP_FAIL_MASK (0x01 << 4)
+
 typedef struct {
     uint8_t fault;
     uint16_t voltage;

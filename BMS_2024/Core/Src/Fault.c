@@ -6,10 +6,9 @@
 
 //! \brief This method initializes the BMS info struct, which contains critical info regarding maxs and mins for 
 // readings in our battery pack
-//! \param cfg is the configuration data used for BMS system
 //! \param bms_struct is the struct that will be filled with critical values 
 //! \returns None
-void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cfg) {
+void init_BMS_info(BMS_critical_info_t * bms_struct) {
     // Init 6811 Readings
     bms_struct->curr_max_voltage = 0;   // assings min voltage threshold for init
     bms_struct->max_volt_cell = 0;
@@ -49,11 +48,10 @@ void init_BMS_info(BMS_critical_info_t * bms_struct, BMSConfigStructTypedef * cf
 
 
 //! \brief This method checks for valid data as well as cell connection, OT, UT, OV, & UT faults
-//! \param cfg is the configuration struct for constants and readings
 //! \param bmsData is a 2D array of 144 cellData, containing voltage, temperature and index
 //! \param bmsStatus is an array that keeps track of BMS Fault information that will be returned over CAN
 //! \returns true if there is a BMS fault, and false if the system has returned no faults
-bool FAULT_check(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms_struct, CellData bmsData[144], uint8_t bmsStatus[6]) {
+bool FAULT_check(BMS_critical_info_t *bms_struct, uint8_t bmsStatus[6]) {
       bool BMS_fault = false;
 
 
