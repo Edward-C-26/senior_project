@@ -1,4 +1,7 @@
-/* LTC6811 Drivers
+/** 
+ * @file LTC6811.c
+ * @brief LTC6811 Drivers
+ *
  *	Matt Vlasaty: March 29th, 2019
  *	Aditya Nikumbh: Refactored Jan 31, 2024
  * 	David Lacayo: April, 2024
@@ -8,7 +11,7 @@
  *		- resolve issue with writeConfig not changing every bit in the first register group
  *		- test functions used to read from every board (readAllCellVoltages should be [12][8])
  *		- minor changes (using more user-defined constants, changing return values)
-*/
+ */
 
 #include "LTC6811.h"
 #define BOARD_IS_FUCKED 1
@@ -41,7 +44,7 @@ void initPECTable(void) {
 }
 
 //! @brief This method is used when sending a command to calculate the necessary PEC bytes to follow command bytes. 
-//		Should be used when receiving data to compare receieved PEC with expected PEC value
+//!		Should be used when receiving data to compare receieved PEC with expected PEC value
 //! @param len is the number of bytes that we will be stepping through in our data 
 //! @param data is the data that we will be using to calculate the expected PEC
 //! @returns the expected PEC value
@@ -95,7 +98,7 @@ void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 }
 
 //! @brief This function is called every loop to accommodate dischargeCells method 
-//		Specifically writes configuration data (UV, OV, ADCMode, etc) to BMSConfig struct
+//!		Specifically writes configuration data (UV, OV, ADCMode, etc) to BMSConfig struct
 //! @param cfg is the configuration files for the constants in the BMS system
 //! @returns none
 void writeConfigAll(BMSConfigStructTypedef *cfg) {
@@ -107,7 +110,7 @@ void writeConfigAll(BMSConfigStructTypedef *cfg) {
 }
 
 //! @brief This function sends an ADCV command that begins conversion for every cell to specified LTC. 
-//		This results in the function readings all cell voltage registers using the readRegister function. 
+//!		This results in the function readings all cell voltage registers using the readRegister function. 
 //! @param address is the address of the board that will be read 
 //! @param cellVoltage is the array that will store the voltages of all the cells on the board being read
 //! @returns true if PEC matches expected PEC value, else false 
@@ -159,7 +162,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 }
 
 //! @brief This function reads all cell voltages by essentially parsing each board and reading the individual cell voltages. These are then 
-//		stored in the bmsData array, along with the cell number that is associated with the reading. 
+//!		stored in the bmsData array, along with the cell number that is associated with the reading. 
 //! @param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! @returns true if no PEC for any register read for any board 
 bool readAllCellVoltages(CellData bmsData[144]) {
@@ -209,9 +212,9 @@ bool readAllCellVoltages(CellData bmsData[144]) {
 }
 
 //! @brief This function initiates ADC conversion for GPIO inputs connected to temperature sensors. 
-//		Reads auxiliary register groups using readRegister function. Then, converts measured voltage into temperature 
-//			based on temperature sensor response. Also checks for disconnected temperature sensor and OT faults. 
-//				NOTE: We only read 4 temps per board, and they are the 4 highest temps on each board.
+//!		Reads auxiliary register groups using readRegister function. Then, converts measured voltage into temperature 
+//!			based on temperature sensor response. Also checks for disconnected temperature sensor and OT faults. 
+//!				NOTE: We only read 4 temps per board, and they are the 4 highest temps on each board.
 //! @param address is the address of the board being read
 //! @param cellTemp is the array that will hold the cell temps read during readRegister
 //! @param dcFault is the array that stores temperature sensor ceonnection for all cells read 
@@ -313,7 +316,7 @@ bool readAllCellTemps(CellData bmsData[144]) {
 }
 
 //! @brief This method uses general readRegister function to check current state of LTC configuration reg. 
-//		Mostly used for testing purposes
+//!		Mostly used for testing purposes
 //! @param address is the address passed into the readRegister function
 //! @param cfg is part of the configuration that will be passed to check the current state of the LTC
 //! @returns true if the received PEC from readRegister mathes the calculated PEC 
@@ -338,9 +341,9 @@ bool readConfig(uint8_t address, uint8_t cfg[8]) {
 }
 
 //! @brief This function checks the cell connections of each cell in the BMS data array.
-//		Currently not used, as we have not been able to get it working, but the whole idea is that 
-//			this function compares previously measured values to open wire check values, and if 
-//				there is a significant drop in voltage, cell is allegedly disconnected. 
+//!		Currently not used, as we have not been able to get it working, but the whole idea is that 
+//!			this function compares previously measured values to open wire check values, and if 
+//!				there is a significant drop in voltage, cell is allegedly disconnected. 
 //! @param cfg is the BMS configuration struct with constants 
 //! @param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! @returns true is the cell is connnected properly, and false if the cell is "disconnected"

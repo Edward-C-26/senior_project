@@ -1,4 +1,5 @@
 /**
+ * @file SPI.c
  * Last Edited Spring 2024 : David Lacayo
 */
 

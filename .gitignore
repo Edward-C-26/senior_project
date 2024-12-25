@@ -80,3 +80,6 @@ Debug/
 # Output Files
 *.o
 
+# Doxygen output
+html
+latex

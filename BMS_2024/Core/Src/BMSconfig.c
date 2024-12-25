@@ -1,6 +1,7 @@
 /**
+ * @file BMSConfig.c
  * Last Edited Spring 2024 : David Lacayo
-*/
+ */
 
 #include "BMSconfig.h"
 

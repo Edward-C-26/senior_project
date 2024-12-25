@@ -47,6 +47,7 @@
 #define CHARGER_OUT_ID 0x405
 #define CELL_VOLTAGE_FAULTS 0x785
 #define CELL_TEMP_FAULTS 0x786
+#define CAN_RX_MAILBOX_SIZE 3
 
 #define CHARGER_IN_ID 0x1806E5F4	// charger CAN ID is 0x1806E5F4
 #define CHARGER_INFO_ID 0x700
@@ -266,18 +267,21 @@ int main(void)
         if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
         	getLaptopCanMessage();
 
+            int messagesDiscarded = 0;
 			// Clear the receive FIFO0 by reading and discarding all messages
-			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0)
+			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0
+                    || messagesDiscarded >= CAN_RX_MAILBOX_SIZE)
 			{
 				// Retrieve and discard the message
 				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData);
+                messagesDiscarded++;
 			}
     	}
 
         // Discharge cells if charge message is valid AND discharge is enabled AND there is no BMS fault
         if((manual_balancing_config.valid_charge_message == true) &&
 			(manual_balancing_config.discharge_balance_en == true) &&
-			(!bmsFault == true)) {
+			(bmsFault == false)) {
 
             thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, manual_balancing_config.discharge_threshold_voltage, manual_balancing_config.num_cells_discharged_per_secondary);
           

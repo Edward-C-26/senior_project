@@ -1,11 +1,12 @@
 /**
+ * @file         Fault.c
  * Last Edited : David Lacayo
-*/
+ */
 
 #include "Fault.h"
 
-//! \brief This method initializes the BMS info struct, which contains critical info regarding maxs and mins for 
-// readings in our battery pack
+//! \brief This method initializes the BMS info struct, which contains critical info regarding maxs and mins for
+//! readings in our battery pack
 //! \param bms_struct is the struct that will be filled with critical values 
 //! \returns None
 void init_BMS_info(BMS_critical_info_t * bms_struct) {

@@ -1,16 +1,17 @@
 /**
+ * @file PackCalculations.c
  * Last Edited Spring 2024 : David Lacayo
-*/
+ */
 #include "PackCalculations.h"
 
-//! \brief This method calculates the maximum and minimum cell voltages in
-//      the pack, and sets those values w/ the associated cell number to the
-//      bms critical info struct
-//! \param cfg is the bms configuration file with constants used in our bms
-//! \param bms is the bms struct that contains critical info regarding our pack 
-//! \param bmsData is an array of 144 cellData structs, containing index, fault,
-//      voltage and temperature
-//! \returns none 
+//! @brief This method calculates the maximum and minimum cell voltages in
+//!      the pack, and sets those values w/ the associated cell number to the
+//!      bms critical info struct
+//! @param cfg is the bms configuration file with constants used in our bms
+//! @param bms is the bms struct that contains critical info regarding our pack 
+//! @param bmsData is an array of 144 cellData structs, containing index, fault,
+//!      voltage and temperature
+//! @returns none 
 void setCriticalVoltages(BMS_critical_info_t *bms,
         CellData const bmsData[144]) {
     uint16_t maxCellVoltage;
@@ -60,14 +61,14 @@ void setCriticalVoltages(BMS_critical_info_t *bms,
 }
 
 
-//! \brief This method calculates the maximum and minimum cell temps in the
-//      pack, and sets those values w/ the associated cell number to the bms
-//      critical info struct
-//! \param cfg is the bms configuration file with constants used in our bms
-//! \param bms is the bms struct that contains critical info regarding our pack 
-//! \param bmsData is an array of 144 cellData structs, 
-//      containing index, fault, voltage and temperature
-//! \returns none 
+//! @brief This method calculates the maximum and minimum cell temps in the
+//!      pack, and sets those values w/ the associated cell number to the bms
+//!      critical info struct
+//! @param cfg is the bms configuration file with constants used in our bms
+//! @param bms is the bms struct that contains critical info regarding our pack 
+//! @param bmsData is an array of 144 cellData structs, 
+//!      containing index, fault, voltage and temperature
+//! @returns none 
 void setCriticalTemps(BMS_critical_info_t *bms, CellData const bmsData[144]) {
 	 	uint16_t maxCellTemp;
 	    uint16_t minCellTemp;
@@ -93,7 +94,7 @@ void setCriticalTemps(BMS_critical_info_t *bms, CellData const bmsData[144]) {
 
 }
 
-//! \brief This function is still a work in progress
+//! @brief This function is still a work in progress
 void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
         CellData bmsData[144], bool cellDischarge[12][12],
         bool fullDischarge[12][12], uint8_t balanceCounter,
@@ -141,7 +142,7 @@ void balance(BMSConfigStructTypedef const *cfg, BMS_critical_info_t *bms,
     } 
 }
 
-//! \brief WIP/untested. Should be run while accumulator is not charging, discharges any cells above the threshold
+//! @brief WIP/untested. Should be run while accumulator is not charging, discharges any cells above the threshold
 void thresholdBalance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms,
         CellData bmsData[144], bool cell_discharge[12][12],
         uint16_t cell_discharge_threshold,
