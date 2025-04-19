@@ -82,5 +82,5 @@ html
 latex
 
 # Build artifacts
-BMS_2024/Debug/
-BMS_2024/Release/
+Debug/
+Release/
