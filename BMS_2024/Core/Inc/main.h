@@ -73,6 +73,8 @@ extern SPI_HandleTypeDef* ltc_spi;
 #define SHUTDOWN_ACTIVE_GPIO_Port GPIOC
 #define PRECHARGE_COMPLETE_Pin GPIO_PIN_1
 #define PRECHARGE_COMPLETE_GPIO_Port GPIOA
+#define DEBUG_LED_Pin GPIO_PIN_2
+#define DEBUG_LED_GPIO_Port GPIOA
 #define SPI_UCOMM_CS_Pin GPIO_PIN_4
 #define SPI_UCOMM_CS_GPIO_Port GPIOA
 #define SPI_UCOMM_SCK_Pin GPIO_PIN_5
@@ -95,6 +97,8 @@ extern SPI_HandleTypeDef* ltc_spi;
 #define ADC_CLKIN_GPIO_Port GPIOC
 #define ADC_DRDY_Pin GPIO_PIN_7
 #define ADC_DRDY_GPIO_Port GPIOC
+#define ADC_RST_Pin GPIO_PIN_8
+#define ADC_RST_GPIO_Port GPIOC
 #define CHARGE_EN_Pin GPIO_PIN_8
 #define CHARGE_EN_GPIO_Port GPIOA
 #define SWDIO_TC_Pin GPIO_PIN_13

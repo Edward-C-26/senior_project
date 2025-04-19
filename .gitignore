@@ -52,7 +52,7 @@ sccprj/
 # Matlab code generation folders
 codegen/
 resources/
-.gitattributes
+# .gitattributes
 
 # Simulink autosave extension
 *.autosave
@@ -65,13 +65,10 @@ octave-workspace
 
 .vscode
 
-
-
 # eclipse specific git ignore
 .metadata/
 RemoteSystemsTempFiles/
 .settings/
-Debug/
 *.launch
 
 # STM32 git ignore
@@ -83,3 +80,7 @@ Debug/
 # Doxygen output
 html
 latex
+
+# Build artifacts
+BMS_2024/Debug/
+BMS_2024/Release/
