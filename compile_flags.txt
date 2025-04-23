@@ -1,10 +1,10 @@
 -Wall
 -Wextra
--IBMS_2024/Core/Inc
--IBMS_2024/Drivers/STM32F4xx_HAL_Driver/Inc
--IBMS_2024/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
--IBMS_2024/Drivers/CMSIS/Device/ST/STM32F4xx/Include
--IBMS_2024/Drivers/CMSIS/Include
+-Ibms_2025/Core/Inc
+-Ibms_2025/Drivers/STM32F4xx_HAL_Driver/Inc
+-Ibms_2025/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
+-Ibms_2025/Drivers/CMSIS/Device/ST/STM32F4xx/Include
+-Ibms_2025/Drivers/CMSIS/Include
 -DUSE_PWR_LDO_SUPPLY
 -DUSE_HAL_DRIVER 
 -DSTM32F446xx
