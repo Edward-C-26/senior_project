@@ -28,6 +28,8 @@
 #include "LTC6811.h"
 #include "PackCalculations.h"
 #include "SPI.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_can.h"
 
 /* USER CODE END Includes */
 
@@ -63,6 +65,13 @@
 // CAN Manual Balancing
 #define MANUAL_BALANCING_ID 0x4E1
 
+// CAN transmit timeout (ms)
+// Assuming a 0% bus load 500kbit/s CAN bus, 5ms would be enough time to send ~23 8 byte CAN messages
+// If we hit the 5ms timeout without transmitting any pending messages, we're either at an extremely high bus load
+// and losing arbitration or there's some other issue (bus disconnected, no termination, etc.)
+#define CAN_TX_TIMEOUT 5
+
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -84,15 +93,14 @@ TIM_HandleTypeDef htim3;
 /* USER CODE BEGIN PV */
 SPI_HandleTypeDef *ltc_spi = &hspi1;
 
-CAN_TxHeaderTypeDef TxHeader;
-CAN_RxHeaderTypeDef RxHeader;
-uint8_t TxData[8];
-uint8_t RxData[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-uint32_t TxMailbox;
-const uint32_t CAN_TX_TIMEOUT = 1 << 20; // Needs to be used along with microsecond delay
+CAN_TxHeaderTypeDef tx_header;
+CAN_RxHeaderTypeDef rx_header;
+uint8_t tx_data[8];
+uint8_t rx_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+uint32_t tx_mailbox;
 
-CAN_TxHeaderTypeDef ChargerTxHeader;
-uint8_t ChargerTxData[8];
+CAN_TxHeaderTypeDef charger_tx_header;
+uint8_t charger_tx_data[8];
 uint8_t charge_rate = 2;
 uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
@@ -125,7 +133,7 @@ static void MX_TIM3_Init(void);
 static void MX_CAN2_Init(void);
 /* USER CODE BEGIN PFP */
 static void setChargerTxData(BMSConfigStructTypedef cfg);
-static void TransmitCanMessage(const CAN_TxHeaderTypeDef *txHeader, uint8_t const *msgData);
+static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]);
 static void CELLVAL_message(CellData const bmsData[144]);
 static void BMSSTAT_message(uint8_t const bmsStatus[6]);
 static void BMSVINF_message(BMS_critical_info_t const *bms);
@@ -277,7 +285,7 @@ int main(void)
                     || messagesDiscarded >= CAN_RX_MAILBOX_SIZE)
 			{
 				// Retrieve and discard the message
-				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData);
+				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
                 messagesDiscarded++;
 			}
     	}
@@ -773,57 +781,60 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-static void TransmitCanMessage(const CAN_TxHeaderTypeDef *txHeader, uint8_t const *msgData) {
-    for (uint32_t i = 0; i < CAN_TX_TIMEOUT; i++)  {
-        volatile uint32_t txMailboxFreeLevel = HAL_CAN_GetTxMailboxesFreeLevel(&hcan1);
-        if (txMailboxFreeLevel > 0) {
-            break;
-        }
+static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]) {
+    uint32_t can_error_code = HAL_CAN_GetError(hcan);
+
+    // If we're in bus off or error passive, skip the 5ms timeout (but try to transmit anyway)
+    if (!(can_error_code & (HAL_CAN_ERROR_BOF | HAL_CAN_ERROR_EPV))) {
+        // Bus OK - wait for up to 5ms for space to become available in the transmit mailboxes
+        uint32_t start_tick = HAL_GetTick();
+        while(HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0 && HAL_GetTick() - start_tick < CAN_TX_TIMEOUT) {}
     }
-    HAL_CAN_AddTxMessage(&hcan1, txHeader, msgData, &TxMailbox);
+
+    return HAL_CAN_AddTxMessage(hcan, tx_header, msg_data, &tx_mailbox) == HAL_OK;
 }
 
 void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
-    ChargerTxHeader.StdId = CHARGER_OUT_ID;
-    ChargerTxHeader.DLC = 8;
+    charger_tx_header.StdId = CHARGER_OUT_ID;
+    charger_tx_header.DLC = 8;
 
     /* voltage data (hex value of desired voltage (V) times 10)*/
-    ChargerTxData[0] = (uint8_t)((cfg.chargerVoltage >> 8) & 0xFF);
-    ChargerTxData[1] = (uint8_t)(cfg.chargerVoltage & 0xFF);
+    charger_tx_data[0] = (uint8_t)((cfg.chargerVoltage >> 8) & 0xFF);
+    charger_tx_data[1] = (uint8_t)(cfg.chargerVoltage & 0xFF);
 
     /* set the current data (hex value of desired current (A) times 10) */
     switch (charge_rate) {
         case 1:
             /* lower current */
-            ChargerTxData[2] = (uint8_t)((cfg.lowerCurrent >> 8) & 0xFF);
-            ChargerTxData[3] = (uint8_t)(cfg.lowerCurrent & 0xFF);
+            charger_tx_data[2] = (uint8_t)((cfg.lowerCurrent >> 8) & 0xFF);
+            charger_tx_data[3] = (uint8_t)(cfg.lowerCurrent & 0xFF);
             break;
 
         case 2:
             /* normal current */
-            ChargerTxData[2] = (uint8_t)((cfg.normalCurrent >> 8) & 0xFF);
-            ChargerTxData[3] = (uint8_t)(cfg.normalCurrent & 0xFF);
+            charger_tx_data[2] = (uint8_t)((cfg.normalCurrent >> 8) & 0xFF);
+            charger_tx_data[3] = (uint8_t)(cfg.normalCurrent & 0xFF);
             break;
 
         default:
             /* no current */
-            ChargerTxData[2] = 0x00;
-            ChargerTxData[3] = 0x00;
+            charger_tx_data[2] = 0x00;
+            charger_tx_data[3] = 0x00;
     }
 
     /* these data bytes are not used */
-    ChargerTxData[4] = 0x00;
-    ChargerTxData[5] = 0x00;
-    ChargerTxData[6] = 0x00;
-    ChargerTxData[7] = 0x00;
+    charger_tx_data[4] = 0x00;
+    charger_tx_data[5] = 0x00;
+    charger_tx_data[6] = 0x00;
+    charger_tx_data[7] = 0x00;
 
-    TransmitCanMessage(&ChargerTxHeader, ChargerTxData);
+    transmit_can_message(&hcan1, &charger_tx_header, charger_tx_data);
 }
 
 static void CELLVAL_message(CellData const bmsData[144]) {
     // canCounter1++;
-    TxHeader.StdId = CELLVAL_ID;
-    TxHeader.DLC = 6;
+    tx_header.StdId = CELLVAL_ID;
+    tx_header.DLC = 6;
 
     //Send dummy CAN message to wake up bus
 
@@ -836,7 +847,7 @@ static void CELLVAL_message(CellData const bmsData[144]) {
     CELLVAL_DATA[5] = 0;
 
 
-    TransmitCanMessage(&TxHeader, CELLVAL_DATA);
+    transmit_can_message(&hcan1, &tx_header, CELLVAL_DATA);
 
 
     //replace with memcopy?
@@ -848,17 +859,17 @@ static void CELLVAL_message(CellData const bmsData[144]) {
         CELLVAL_DATA[4] = (uint8_t) (bmsData[cell].temperature >> 8);
         CELLVAL_DATA[5] = (uint8_t)(bmsData[cell].temperature & 0xFF);
 
-        TransmitCanMessage(&TxHeader, CELLVAL_DATA);
+        transmit_can_message(&hcan1, &tx_header, CELLVAL_DATA);
     }
 }
 
 static void BMSSTAT_message(uint8_t const bmsStatus[6]) {
     // canCounter2++;
 
-    TxHeader.StdId = BMSSTAT_ID;
-    TxHeader.DLC = 6;
+    tx_header.StdId = BMSSTAT_ID;
+    tx_header.DLC = 6;
 
-    TransmitCanMessage(&TxHeader, bmsStatus);
+    transmit_can_message(&hcan1, &tx_header, bmsStatus);
 }
 
 static void BMSVINF_message(BMS_critical_info_t const *bms) {
@@ -868,8 +879,8 @@ static void BMSVINF_message(BMS_critical_info_t const *bms) {
     const uint8_t maxCell = bms->max_volt_cell;
 
 
-    TxHeader.StdId = BMSVINF_ID;
-    TxHeader.DLC = 8;
+    tx_header.StdId = BMSVINF_ID;
+    tx_header.DLC = 8;
     uint8_t BMSVINF_DATA[8];
 
     BMSVINF_DATA[0] = (uint8_t)((maxV >> 8) & 0xFF);
@@ -881,7 +892,7 @@ static void BMSVINF_message(BMS_critical_info_t const *bms) {
     // BMSVINF_DATA[6] = (uint8_t)((averageV >> 8) & 0xFF);
     // BMSVINF_DATA[7] = (uint8_t)(averageV & 0xFF);
 
-    TransmitCanMessage(&TxHeader, BMSVINF_DATA);  
+    transmit_can_message(&hcan1, &tx_header, BMSVINF_DATA);  
 }
 
 static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
@@ -893,8 +904,8 @@ static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
     // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC)); //bug -> we only take 4 readings per board for temperatures
     // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC));
 
-    TxHeader.StdId = BMSTINF_ID;
-    TxHeader.DLC = 8;
+    tx_header.StdId = BMSTINF_ID;
+    tx_header.DLC = 8;
     uint8_t BMSTINF_DATA[8];
 
     BMSTINF_DATA[0] = (uint8_t)((maxT >> 8) & 0xFF);
@@ -906,7 +917,7 @@ static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
     // BMSTINF_DATA[6] = (uint8_t)((averageT >> 8) & 0xFF);
     // BMSTINF_DATA[7] = (uint8_t)(averageT & 0xFF);
 
-    TransmitCanMessage(&TxHeader, BMSTINF_DATA);
+    transmit_can_message(&hcan1, &tx_header, BMSTINF_DATA);
 
     // Insert PWM code
     if ((maxT < 17400) || bmsFault) {
@@ -918,8 +929,8 @@ static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
 }
 
 static void PACKSTAT_message(BMS_critical_info_t const *bms) {
-    TxHeader.StdId = PACKSTAT_ID;
-    TxHeader.DLC = 6;
+    tx_header.StdId = PACKSTAT_ID;
+    tx_header.DLC = 6;
     uint8_t PACKSTAT_DATA[6];
 
     const uint16_t pack_voltage = bms->packVoltage;
@@ -933,14 +944,14 @@ static void PACKSTAT_message(BMS_critical_info_t const *bms) {
     PACKSTAT_DATA[4] = (uint8_t)((pack_power >> 8) & 0xFF);
     PACKSTAT_DATA[5] = (uint8_t)(pack_power & 0xFF);
 
-    TransmitCanMessage(&TxHeader, PACKSTAT_DATA);
+    transmit_can_message(&hcan1, &tx_header, PACKSTAT_DATA);
 }
 
 void CHARGER_message() {
-	TxHeader.StdId = 0;  // Set to 0 for extended IDs
-	TxHeader.ExtId = CHARGER_IN_ID; // Set your 29-bit ID
-	TxHeader.DLC = 8;				// set command length
-	TxHeader.IDE = CAN_ID_EXT;       // Set to extended ID
+	tx_header.StdId = 0;  // Set to 0 for extended IDs
+	tx_header.ExtId = CHARGER_IN_ID; // Set your 29-bit ID
+	tx_header.DLC = 8;				// set command length
+	tx_header.IDE = CAN_ID_EXT;       // Set to extended ID
 
 	uint8_t CHARGER_DATA[8];
 
@@ -960,13 +971,13 @@ void CHARGER_message() {
 	CHARGER_DATA[6] = 0x00;
 	CHARGER_DATA[7] = 0x00;
 
-    TransmitCanMessage(&TxHeader, CHARGER_DATA);
+    transmit_can_message(&hcan1, &tx_header, CHARGER_DATA);
 
     // reset to normal
-	TxHeader.StdId = 0;  // Set to 0 for extended IDs
-	TxHeader.ExtId = 0; // Set your 29-bit ID
-	TxHeader.DLC = 8;				// set command length
-	TxHeader.IDE = CAN_ID_STD;       // Set to extended ID
+	tx_header.StdId = 0;  // Set to 0 for extended IDs
+	tx_header.ExtId = 0; // Set your 29-bit ID
+	tx_header.DLC = 8;				// set command length
+	tx_header.IDE = CAN_ID_STD;       // Set to extended ID
 }
 
 // reset all variables to default
@@ -983,21 +994,21 @@ void resetChargerVariables() {
 }
 
 void getLaptopCanMessage(){
-  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData);
+  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
 
-  if (RxHeader.StdId == POLLING_ID) {
+  if (rx_header.StdId == POLLING_ID) {
     pollingFlag = true;
   }
 
-  switch (RxHeader.StdId) {
+  switch (rx_header.StdId) {
 	  case MANUAL_BALANCING_ID: // insert laptop to charger can id here
-		  manual_balancing_config.charge_en = (RxData[0] == 0xFF);
-		  manual_balancing_config.charge_voltage = ((RxData[1] << 8) | (RxData[2]));
-		  manual_balancing_config.charge_current = ((RxData[3] << 8) | (RxData[4]));
+		  manual_balancing_config.charge_en = (rx_data[0] == 0xFF);
+		  manual_balancing_config.charge_voltage = ((rx_data[1] << 8) | (rx_data[2]));
+		  manual_balancing_config.charge_current = ((rx_data[3] << 8) | (rx_data[4]));
 
-		  manual_balancing_config.discharge_balance_en = (RxData[5] & 0xF0) == 0xF0;
-		  manual_balancing_config.num_cells_discharged_per_secondary = (RxData[5] & 0x0F);
-		  manual_balancing_config.discharge_threshold_voltage = ((RxData[6] << 8) | (RxData[7]));
+		  manual_balancing_config.discharge_balance_en = (rx_data[5] & 0xF0) == 0xF0;
+		  manual_balancing_config.num_cells_discharged_per_secondary = (rx_data[5] & 0x0F);
+		  manual_balancing_config.discharge_threshold_voltage = ((rx_data[6] << 8) | (rx_data[7]));
 
 		  // check for validity
 
