@@ -6,6 +6,8 @@
 #include "math.h"
 // Lock your computer bro --Louis Ye
 
+// ADC measurement to voltage conversion constant
+#define LTC6811_ADC_LSB_PER_V 10000
 
 static const float lookupTableTemps[] = {
 	//203 value lookup table to avoid Stenhart-Hart equation.

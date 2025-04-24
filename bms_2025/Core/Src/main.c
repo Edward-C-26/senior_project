@@ -21,15 +21,23 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
+
+#include "stm32f4xx.h"
+#include "stm32f4xx_hal.h"
+
 #include "BMSconfig.h"
 #include "Fault.h"
-// #include "LTC2949.h"
 #include "LTC6811.h"
 #include "PackCalculations.h"
 #include "SPI.h"
-#include "stm32f4xx_hal.h"
+
+#include "can_1.h"
+#include "can_2.h"
 #include "stm32f4xx_hal_can.h"
+#include "stm32f4xx_hal_gpio.h"
 
 /* USER CODE END Includes */
 
@@ -134,12 +142,12 @@ static void MX_CAN2_Init(void);
 /* USER CODE BEGIN PFP */
 static void setChargerTxData(BMSConfigStructTypedef cfg);
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]);
-static void CELLVAL_message(CellData const bmsData[144]);
-static void BMSSTAT_message(uint8_t const bmsStatus[6]);
-static void BMSVINF_message(BMS_critical_info_t const *bms);
-static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault);
+static void transmit_cell_data_msg(CellData const bmsData[144]);
+static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t const bmsStatus[6]);
+static void transmit_cell_vlt_msg(BMS_critical_info_t const *bms);
+static void transmit_cell_temp_msg(BMS_critical_info_t const *bms);
 // void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]); // old method 
-static void PACKSTAT_message(BMS_critical_info_t const *bms); // draft :D
+// static void PACKSTAT_message(BMS_critical_info_t const *bms); // draft :D
 
 // Manual Charging/Balancing Functions
 void CHARGER_message();
@@ -323,14 +331,14 @@ int main(void)
         charging_counter++;
 
         // Send remaining CAN messages
-        BMSVINF_message(&BMSCriticalInfo);    
-        BMSTINF_message(&BMSCriticalInfo, bmsFault);
-        PACKSTAT_message(&BMSCriticalInfo);
-        BMSSTAT_message(BMS_STATUS);
-        PACKSTAT_message(&BMSCriticalInfo);
+        transmit_cell_vlt_msg(&BMSCriticalInfo);    
+        transmit_cell_temp_msg(&BMSCriticalInfo);
+        transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
+        // PACKSTAT_message(&BMSCriticalInfo);
+        // PACKSTAT_message(&BMSCriticalInfo);
 
       if (pollingFlag || CONSTANT_CAN_ENABLE){
-        CELLVAL_message(bmsData);
+        transmit_cell_data_msg(bmsData);
         pollingFlag = false;
       }
     }
@@ -834,120 +842,120 @@ void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
     transmit_can_message(&hcan1, &charger_tx_header, charger_tx_data);
 }
 
-static void CELLVAL_message(CellData const bmsData[144]) {
-    // canCounter1++;
-    tx_header.StdId = CELLVAL_ID;
-    tx_header.DLC = 6;
+static void transmit_cell_data_msg(CellData const bmsData[144]) {
+    CAN_TxHeaderTypeDef header = {
+        .StdId = CAN_1_BMS_CELL_DATA_ID,
+        .DLC = CAN_1_BMS_CELL_DATA_LENGTH,
+        .IDE = CAN_ID_STD,
+        .RTR = CAN_RTR_DATA,
+        .TransmitGlobalTime = DISABLE
+    };
 
-    //Send dummy CAN message to wake up bus
+    uint8_t data[CAN_1_BMS_CELL_DATA_LENGTH];
+    struct can_1_bms_cell_data cell_data_msg = {};
 
-    uint8_t CELLVAL_DATA[6];
-    CELLVAL_DATA[0] = 0; // Should not  be a CELL_VAL message. Let's add a wake ID instead
-    CELLVAL_DATA[1] = 0;
-    CELLVAL_DATA[2] = 0;
-    CELLVAL_DATA[3] = 0;
-    CELLVAL_DATA[4] = 0;
-    CELLVAL_DATA[5] = 0;
-
-
-    transmit_can_message(&hcan1, &tx_header, CELLVAL_DATA);
-
-
-    //replace with memcopy?
     for (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-        CELLVAL_DATA[0] = cell;
-        CELLVAL_DATA[1] = bmsData[cell].fault;
-        CELLVAL_DATA[2] = (uint8_t) (bmsData[cell].voltage >> 8);
-        CELLVAL_DATA[3] = (uint8_t)(bmsData[cell].voltage & 0xFF);
-        CELLVAL_DATA[4] = (uint8_t) (bmsData[cell].temperature >> 8);
-        CELLVAL_DATA[5] = (uint8_t)(bmsData[cell].temperature & 0xFF);
+        cell_data_msg.idx_cell_data = cell;
 
-        transmit_can_message(&hcan1, &tx_header, CELLVAL_DATA);
+        cell_data_msg.vlt_cell_data = (float)bmsData[cell].voltage / LTC6811_ADC_LSB_PER_V;
+        cell_data_msg.temp_cell_data = (float)bmsData[cell].temperature / 100.0F;
+        // TODO: remove placeholder values after merging SOC estimation branch
+        cell_data_msg.soc_cell_data = 0.0F;
+        cell_data_msg.soh_cell_data = 0.0F;
+
+        // TODO: make bmsData[cell].fault a bitfield
+        cell_data_msg.cell_fault_disconnected = (bool)(bmsData[cell].fault & CELL_DISCONNECT_MASK);
+        cell_data_msg.cell_fault_dc = (bool)(bmsData[cell].fault & CELL_DCFAULT_MASK);
+        cell_data_msg.cell_fault_temp = (bool)(bmsData[cell].fault & CELL_TEMP_FAIL_MASK);
+        cell_data_msg.cell_fault_pec = (bool)(bmsData[cell].fault & CELL_PEC_FAIL_MASK);
+
+        can_1_bms_cell_data_pack(data, &cell_data_msg, sizeof(data));
+        transmit_can_message(&hcan1, &header, data);
     }
 }
 
-static void BMSSTAT_message(uint8_t const bmsStatus[6]) {
+static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t const bmsStatus[6]) {
     // canCounter2++;
+    CAN_TxHeaderTypeDef header = {
+        .StdId = CAN_1_BMS_STATUS_ID,
+        .DLC = CAN_1_BMS_STATUS_LENGTH,
+        .IDE = CAN_ID_STD,
+        .RTR = CAN_RTR_DATA,
+        .TransmitGlobalTime = DISABLE
+    };
 
-    tx_header.StdId = BMSSTAT_ID;
-    tx_header.DLC = 6;
+    uint8_t data[CAN_1_BMS_STATUS_LENGTH];
+    struct can_1_bms_status status_msg = {
+        .soc_accum = 0.0F, // TODO
+        .cur_accum = (float)bms->packCurrent,
+        .vlt_accum = (float)bms->packVoltage,
 
-    transmit_can_message(&hcan1, &tx_header, bmsStatus);
+        // TODO: refactor tf out of this lol
+        .bms_fault_ovp = bmsStatus[0] & 0x01,
+        .bms_fault_uvp = bmsStatus[0] & 0x02,
+        .bms_fault_otp = bmsStatus[0] & 0x04,
+        .bms_fault_utp = bmsStatus[0] & 0x08,
+
+        // TODO: do we really not read this anywhere else in code? also active high/low?
+        .precharge_cplt = HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin)
+    };
+
+    can_1_bms_status_pack(data, &status_msg, sizeof(data));
+    transmit_can_message(&hcan1, &header, data);
 }
 
-static void BMSVINF_message(BMS_critical_info_t const *bms) {
-    const uint16_t minV = bms->curr_min_voltage;
-    const uint8_t minCell = bms->min_volt_cell;
-    const uint16_t maxV = bms->curr_max_voltage;
-    const uint8_t maxCell = bms->max_volt_cell;
+static void transmit_cell_vlt_msg(BMS_critical_info_t const *bms) {
+    CAN_TxHeaderTypeDef header = {
+        .StdId = CAN_1_BMS_CELL_VLT_ID,
+        .DLC = CAN_1_BMS_CELL_VLT_LENGTH,
+        .IDE = CAN_ID_STD,
+        .RTR = CAN_RTR_DATA,
+        .TransmitGlobalTime = DISABLE
+    };
 
+    uint8_t data[CAN_1_BMS_CELL_VLT_LENGTH];
+    struct can_1_bms_cell_vlt cell_vlt_msg = {
+        .vlt_cell_max = (float)bms->curr_max_voltage / LTC6811_ADC_LSB_PER_V,
+        .vlt_cell_min = (float)bms->curr_min_voltage / LTC6811_ADC_LSB_PER_V,
+        // TODO: make cell indices consistent
+        .idx_vlt_max = bms->max_volt_cell - 1,
+        .idx_vlt_min = bms->min_volt_cell - 1
+    };
 
-    tx_header.StdId = BMSVINF_ID;
-    tx_header.DLC = 8;
-    uint8_t BMSVINF_DATA[8];
-
-    BMSVINF_DATA[0] = (uint8_t)((maxV >> 8) & 0xFF);
-    BMSVINF_DATA[1] = (uint8_t)(maxV & 0xFF);
-    BMSVINF_DATA[2] = maxCell;
-    BMSVINF_DATA[3] = (uint8_t)((minV >> 8) & 0xFF);
-    BMSVINF_DATA[4] = (uint8_t)(minV & 0xFF);
-    BMSVINF_DATA[5] = minCell;
-    // BMSVINF_DATA[6] = (uint8_t)((averageV >> 8) & 0xFF);
-    // BMSVINF_DATA[7] = (uint8_t)(averageV & 0xFF);
-
-    transmit_can_message(&hcan1, &tx_header, BMSVINF_DATA);  
+    can_1_bms_cell_vlt_pack(data, &cell_vlt_msg, sizeof(data));
+    transmit_can_message(&hcan1, &header, data);
 }
 
-static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
-    const uint16_t minT = bms->curr_min_temp;
-    const uint8_t minCell = bms->min_temp_cell;
-    const uint16_t maxT = bms->curr_max_temp;
-    const uint8_t maxCell = bms->max_temp_cell;
+static void transmit_cell_temp_msg(BMS_critical_info_t const *bms) {
+    CAN_TxHeaderTypeDef header = {
+        .StdId = CAN_1_BMS_CELL_TEMP_ID,
+        .DLC = CAN_1_BMS_CELL_TEMP_LENGTH,
+        .IDE = CAN_ID_STD,
+        .RTR = CAN_RTR_DATA,
+        .TransmitGlobalTime = DISABLE
+    };
 
-    // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC)); //bug -> we only take 4 readings per board for temperatures
-    // averageT = (uint16_t)(sum / (cfg.numOfICs * cfg.numOfTempPerIC));
+    uint8_t data[CAN_1_BMS_CELL_TEMP_LENGTH];
+    struct can_1_bms_cell_temp cell_temp_msg = {
+        // TODO
+        .temp_cell_max = (float)bms->curr_max_temp / 100.0F,
+        .temp_cell_min = (float)bms->curr_min_temp / 100.0F,
+        // TODO: make cell indices consistent
+        .idx_temp_max = bms->max_temp_cell - 1,
+        .idx_temp_min = bms->min_temp_cell - 1
+    };
 
-    tx_header.StdId = BMSTINF_ID;
-    tx_header.DLC = 8;
-    uint8_t BMSTINF_DATA[8];
+    can_1_bms_cell_temp_pack(data, &cell_temp_msg, sizeof(data));
+    transmit_can_message(&hcan1, &header, data);
 
-    BMSTINF_DATA[0] = (uint8_t)((maxT >> 8) & 0xFF);
-    BMSTINF_DATA[1] = (uint8_t)(maxT & 0xFF);
-    BMSTINF_DATA[2] = maxCell;
-    BMSTINF_DATA[3] = (uint8_t)((minT >> 8) & 0xFF);
-    BMSTINF_DATA[4] = (uint8_t)(minT & 0xFF);
-    BMSTINF_DATA[5] = minCell;
-    // BMSTINF_DATA[6] = (uint8_t)((averageT >> 8) & 0xFF);
-    // BMSTINF_DATA[7] = (uint8_t)(averageT & 0xFF);
-
-    transmit_can_message(&hcan1, &tx_header, BMSTINF_DATA);
-
+    // TODO: wtf does this do?? 2024 accumulator fans?
     // Insert PWM code
-    if ((maxT < 17400) || bmsFault) {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
-    } else {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
-        // HAL_GPIO_TogglePin(DEBUG_GPIO_Port, DEBUG_Pin);	// which PIN is this? 
-    }
-}
-
-static void PACKSTAT_message(BMS_critical_info_t const *bms) {
-    tx_header.StdId = PACKSTAT_ID;
-    tx_header.DLC = 6;
-    uint8_t PACKSTAT_DATA[6];
-
-    const uint16_t pack_voltage = bms->packVoltage;
-    const uint16_t pack_current = bms->packCurrent;
-    const uint16_t pack_power = bms->packPower;
-
-    PACKSTAT_DATA[0] = (uint8_t)((pack_voltage >> 8) & 0xFF);
-    PACKSTAT_DATA[1] = (uint8_t)(pack_voltage & 0xFF);
-    PACKSTAT_DATA[2] = (uint8_t)((pack_current >> 8) & 0xFF);
-    PACKSTAT_DATA[3] = (uint8_t)(pack_current & 0xFF);
-    PACKSTAT_DATA[4] = (uint8_t)((pack_power >> 8) & 0xFF);
-    PACKSTAT_DATA[5] = (uint8_t)(pack_power & 0xFF);
-
-    transmit_can_message(&hcan1, &tx_header, PACKSTAT_DATA);
+    // if ((maxT < 17400) || bmsFault) {
+    //     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+    // } else {
+    //     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
+    //     // HAL_GPIO_TogglePin(DEBUG_GPIO_Port, DEBUG_Pin);	// which PIN is this? 
+    // }
 }
 
 void CHARGER_message() {
