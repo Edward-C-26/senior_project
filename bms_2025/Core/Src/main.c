@@ -216,8 +216,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-    	TIM2 -> CCR2 = 50;
 
         writeConfigAll(&BMSConfig);
 
@@ -858,7 +856,7 @@ static void transmit_cell_data_msg(CellData const bmsData[144]) {
         cell_data_msg.idx_cell_data = cell;
 
         cell_data_msg.vlt_cell_data = (float)bmsData[cell].voltage / LTC6811_ADC_LSB_PER_V;
-        cell_data_msg.temp_cell_data = (float)bmsData[cell].temperature / 100.0F;
+        cell_data_msg.temp_cell_data = (float)bmsData[cell].temperature / 1000.0F;
         // TODO: remove placeholder values after merging SOC estimation branch
         cell_data_msg.soc_cell_data = 0.0F;
         cell_data_msg.soh_cell_data = 0.0F;
@@ -887,8 +885,8 @@ static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t cons
     uint8_t data[CAN_1_BMS_STATUS_LENGTH];
     struct can_1_bms_status status_msg = {
         .soc_accum = 0.0F, // TODO
-        .cur_accum = (float)bms->packCurrent,
-        .vlt_accum = (float)bms->packVoltage,
+        .cur_accum = 0.0F,
+        .vlt_accum = (float)bms->packVoltage / 10.0F,
 
         // TODO: refactor tf out of this lol
         .bms_fault_ovp = bmsStatus[0] & 0x01,
@@ -918,8 +916,8 @@ static void transmit_cell_vlt_msg(BMS_critical_info_t const *bms) {
         .vlt_cell_max = (float)bms->curr_max_voltage / LTC6811_ADC_LSB_PER_V,
         .vlt_cell_min = (float)bms->curr_min_voltage / LTC6811_ADC_LSB_PER_V,
         // TODO: make cell indices consistent
-        .idx_vlt_max = bms->max_volt_cell - 1,
-        .idx_vlt_min = bms->min_volt_cell - 1
+        .idx_vlt_max = bms->max_volt_cell,
+        .idx_vlt_min = bms->min_volt_cell
     };
 
     can_1_bms_cell_vlt_pack(data, &cell_vlt_msg, sizeof(data));
@@ -938,11 +936,11 @@ static void transmit_cell_temp_msg(BMS_critical_info_t const *bms) {
     uint8_t data[CAN_1_BMS_CELL_TEMP_LENGTH];
     struct can_1_bms_cell_temp cell_temp_msg = {
         // TODO
-        .temp_cell_max = (float)bms->curr_max_temp / 100.0F,
-        .temp_cell_min = (float)bms->curr_min_temp / 100.0F,
+        .temp_cell_max = (float)bms->curr_max_temp / 1000.0F,
+        .temp_cell_min = (float)bms->curr_min_temp / 1000.0F,
         // TODO: make cell indices consistent
-        .idx_temp_max = bms->max_temp_cell - 1,
-        .idx_temp_min = bms->min_temp_cell - 1
+        .idx_temp_max = bms->max_temp_cell,
+        .idx_temp_min = bms->min_temp_cell
     };
 
     can_1_bms_cell_temp_pack(data, &cell_temp_msg, sizeof(data));
