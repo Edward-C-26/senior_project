@@ -282,7 +282,7 @@ int main(void)
             int messagesDiscarded = 0;
 			// Clear the receive FIFO0 by reading and discarding all messages
 			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0
-                    || messagesDiscarded >= CAN_RX_MAILBOX_SIZE)
+                    || messagesDiscarded < CAN_RX_MAILBOX_SIZE)
 			{
 				// Retrieve and discard the message
 				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
