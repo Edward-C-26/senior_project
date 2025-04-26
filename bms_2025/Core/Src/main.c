@@ -28,6 +28,7 @@
 #include "LTC6811.h"
 #include "PackCalculations.h"
 #include "SPI.h"
+#include "isoADC.h"
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_can.h"
 
@@ -87,6 +88,7 @@ SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
@@ -109,15 +111,20 @@ uint8_t charging_counter = 0;
 bool bmsFault = 0;
 bool CHARGE_EN = 0;
 
-uint16_t *buff_2949;
-bool ret_2949;
-
 CellData bmsData[144];
 uint8_t BMS_STATUS[6];
 bool discharge[12][12];
 bool full_discharge[12][12];
 
 manual_balancing_t manual_balancing_config;
+
+SPI_HandleTypeDef* isoADC_SPI_ptr_g = &hspi2;
+GPIO_TypeDef* isoADC_SPI_cs_port_ptr_g = SPI_ADC_CS_GPIO_Port;
+uint16_t isoADC_SPI_cs_pin_g = GPIO_PIN_12;
+TIM_HandleTypeDef* isoADC_PWM_ptr_g = &htim3;
+uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
+isoADCConfig_t isoADCConfig;
+isoADCData_t isoADCData;
 
 /* USER CODE END PV */
 
@@ -131,8 +138,8 @@ static void MX_SPI3_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CAN2_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
-static void setChargerTxData(BMSConfigStructTypedef cfg);
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]);
 static void CELLVAL_message(CellData const bmsData[144]);
 static void BMSSTAT_message(uint8_t const bmsStatus[6]);
@@ -191,13 +198,16 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_CAN2_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
     initPECTable();
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo);
     resetChargerVariables();
+    wakeup_isoADC(&isoADCConfig, &isoADCData);
 
     HAL_CAN_Start(&hcan1);
+    HAL_TIM_Base_Start_IT(&htim1);
 
   /* USER CODE END 2 */
 
@@ -211,7 +221,10 @@ int main(void)
     	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
     	TIM2 -> CCR2 = 50;
 
-        writeConfigAll(&BMSConfig);
+        // disable and enable IRQs before and after LTC6811 Transactions
+    	START_CRITICAL_SECTION;
+      writeConfigAll(&BMSConfig);
+      END_CRITICAL_SECTION;
 
         /** FUNCTION CALL OVERVIEW
          * First: Call read6811 -> Voltages, Temps on 6811
@@ -220,13 +233,18 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
+    	  START_CRITICAL_SECTION;
         readAllCellVoltages(bmsData);
+        END_CRITICAL_SECTION;
+
         setCriticalVoltages(&BMSCriticalInfo, bmsData);
 
 
         // Read all Temps from LTC6811, store them in 144x6 array,
         // set the critical info struct, then send temp info over CAN
+        START_CRITICAL_SECTION;
         readAllCellTemps(bmsData);
+    	  END_CRITICAL_SECTION;
 
         setCriticalTemps(&BMSCriticalInfo, bmsData);
 
@@ -251,29 +269,9 @@ int main(void)
              }
          }
 
-        // Finally, balance if charging and toggled 
-        // TODO: make no balance when bms fault
-        if(CHARGE_EN == 0 && BALANCE_EN == 1) {
-            if(charge_rate != 0) {
-                balance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge,
-                        full_discharge, balance_counter, &charge_rate);
-
-                if(balance_counter == 12) {
-                    balance_counter = 0;
-                }
-            }
-            setChargerTxData(BMSConfig);
-
-            if(charge_rate != 0) {
-                dischargeCellGroups(&BMSConfig, discharge);
-                HAL_Delay(BMSConfig.dischargeTime);
-            } else {
-                // checkDischarge(BMSConfig, full_discharge, bmsData);
-                // not anywhere in past code??? WTF
-                dischargeCellGroups(&BMSConfig, full_discharge);
-                HAL_Delay(BMSConfig.dischargeTime);
-            }
-        }
+         read_isoADC_ADCs(&isoADCConfig, &isoADCData);
+        convert_raw_to_actual(&isoADCConfig, &isoADCData);
+        BMSCriticalInfo.packVoltage = (uint16_t)isoADCData.bus_voltage;
 
         // poll for CAN1 Message from Laptop
         if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
@@ -282,7 +280,7 @@ int main(void)
             int messagesDiscarded = 0;
 			// Clear the receive FIFO0 by reading and discarding all messages
 			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0
-                    || messagesDiscarded >= CAN_RX_MAILBOX_SIZE)
+                    || messagesDiscarded < CAN_RX_MAILBOX_SIZE)
 			{
 				// Retrieve and discard the message
 				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
@@ -597,6 +595,52 @@ static void MX_SPI3_Init(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 15;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 9999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -795,43 +839,6 @@ static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderType
     }
 
     return HAL_CAN_AddTxMessage(hcan, tx_header, msg_data, &tx_mailbox) == HAL_OK;
-}
-
-void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
-    charger_tx_header.StdId = CHARGER_OUT_ID;
-    charger_tx_header.DLC = 8;
-
-    /* voltage data (hex value of desired voltage (V) times 10)*/
-    charger_tx_data[0] = (uint8_t)((cfg.chargerVoltage >> 8) & 0xFF);
-    charger_tx_data[1] = (uint8_t)(cfg.chargerVoltage & 0xFF);
-
-    /* set the current data (hex value of desired current (A) times 10) */
-    switch (charge_rate) {
-        case 1:
-            /* lower current */
-            charger_tx_data[2] = (uint8_t)((cfg.lowerCurrent >> 8) & 0xFF);
-            charger_tx_data[3] = (uint8_t)(cfg.lowerCurrent & 0xFF);
-            break;
-
-        case 2:
-            /* normal current */
-            charger_tx_data[2] = (uint8_t)((cfg.normalCurrent >> 8) & 0xFF);
-            charger_tx_data[3] = (uint8_t)(cfg.normalCurrent & 0xFF);
-            break;
-
-        default:
-            /* no current */
-            charger_tx_data[2] = 0x00;
-            charger_tx_data[3] = 0x00;
-    }
-
-    /* these data bytes are not used */
-    charger_tx_data[4] = 0x00;
-    charger_tx_data[5] = 0x00;
-    charger_tx_data[6] = 0x00;
-    charger_tx_data[7] = 0x00;
-
-    transmit_can_message(&hcan1, &charger_tx_header, charger_tx_data);
 }
 
 static void CELLVAL_message(CellData const bmsData[144]) {
@@ -1068,57 +1075,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     (void)hcan;
 }
-
-
-// This will not work if we aren't using ADC
-/*
-void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]) {
-    // canCounter3++;
-    uint16_t channel1;
-    uint16_t channel2;
-    uint16_t pack_voltage;
-
-    // +/- 20A (high res, channel 1)
-    sConfig.Channel = ADC_CHANNEL_1;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;
-    HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-
-    HAL_ADC_Start(&hadc1);
-    // HAL_ADCEx_Calibration_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    channel1 = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-
-    // +/- 500A (full range, channel 2)
-    sConfig.Channel = ADC_CHANNEL_2;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;
-    HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-
-    HAL_ADC_Start(&hadc1);
-    // HAL_ADCEx_Calibration_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    channel2 = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-
-    pack_voltage = (uint16_t)((bms.packVoltage / 10000) * 100);	// mV to V
-
-    TxHeader.StdId = PACKSTAT_ID;
-    TxHeader.DLC = 7;
-    uint8_t PACKSTAT_DATA[7];
-
-    PACKSTAT_DATA[0] = (uint8_t)((pack_voltage >> 8) & 0xFF);
-    PACKSTAT_DATA[1] = (uint8_t)(pack_voltage & 0xFF);
-    PACKSTAT_DATA[2] = (uint8_t)((channel1 >> 8) & 0xFF);
-    PACKSTAT_DATA[3] = (uint8_t)(channel1 & 0xFF);
-    PACKSTAT_DATA[4] = (uint8_t)((channel2 >> 8) & 0xFF);
-    PACKSTAT_DATA[5] = (uint8_t)(channel2 & 0xFF);
-    PACKSTAT_DATA[6] = 0x00;
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, PACKSTAT_DATA, &TxMailbox);
-    // returns message with cell voltage data
-}
-*/
 
 /* USER CODE END 4 */
 

@@ -41,7 +41,9 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-
+#define CRITICAL_INTR_SRCNO TIM1_UP_TIM10_IRQn
+#define START_CRITICAL_SECTION HAL_NVIC_DisableIRQ(CRITICAL_INTR_SRCNO)
+#define END_CRITICAL_SECTION HAL_NVIC_EnableIRQ(CRITICAL_INTR_SRCNO)
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
