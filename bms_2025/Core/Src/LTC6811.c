@@ -14,7 +14,10 @@
  */
 
 #include "LTC6811.h"
-#define BOARD_IS_FUCKED 1
+
+// boards will NOT be fucked in 2025 :pray: :pray:
+#define BOARD_IS_FUCKED 0 
+
 #define PEC_TABLE_SIZE 256
 #define UNDER_TEMP_LIMIT 10
 #define OVER_TEMP_LIMIT 55

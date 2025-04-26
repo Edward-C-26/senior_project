@@ -63,7 +63,7 @@ typedef struct {
 
 typedef struct {
     uint8_t fault;
-    uint16_t voltage;
+    uint16_t voltage; // LTC6811 ADC measurement - 1 LSB = 100uV = 0.0001V
     uint16_t temperature;
 } CellData;
 
