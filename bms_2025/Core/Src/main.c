@@ -61,7 +61,7 @@
 
 #define CHARGER_IN_ID 0x1806E5F4	// charger CAN ID is 0x1806E5F4
 #define CHARGER_INFO_ID 0x700
-#define CONSTANT_CAN_ENABLE 1
+#define CONSTANT_CAN_ENABLE 0
 
 
 #define BALANCE_EN  0
@@ -205,7 +205,7 @@ int main(void)
     init_BMS_info(&BMSCriticalInfo);
     resetChargerVariables();
 
-    HAL_CAN_Start(&hcan1);
+//    HAL_CAN_Start(&hcan1);
 
   /* USER CODE END 2 */
 
