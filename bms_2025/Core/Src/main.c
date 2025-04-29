@@ -125,6 +125,8 @@ TIM_HandleTypeDef* isoADC_PWM_ptr_g = &htim3;
 uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
 isoADCConfig_t isoADCConfig;
 isoADCData_t isoADCData;
+BMS_critical_info_t BMSCriticalInfo;
+
 
 /* USER CODE END PV */
 
@@ -178,7 +180,6 @@ int main(void)
 
   /* USER CODE BEGIN Init */
     BMSConfigStructTypedef BMSConfig;
-    BMS_critical_info_t BMSCriticalInfo;
 
   /* USER CODE END Init */
 
@@ -828,6 +829,21 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+uint32_t prevTime = 0;
+uint32_t timeBetween = 0;
+uint8_t error_cnt = 0;
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    uint32_t new_t = HAL_GetTick();
+    timeBetween = new_t - prevTime;
+    prevTime = new_t;
+    read_isoADC_ADCs(&isoADCConfig, &isoADCData);
+    error_cnt += isoADCData.ch0_drdy ? 0 : 1;
+    convert_raw_to_actual(&isoADCConfig, &isoADCData);
+    BMSCriticalInfo.packVoltage = (uint16_t)isoADCData.bus_voltage;
+    PACKSTAT_message(&BMSCriticalInfo);
+}
+
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]) {
     uint32_t can_error_code = HAL_CAN_GetError(hcan);
 
@@ -940,8 +956,8 @@ static void BMSTINF_message(BMS_critical_info_t const *bms, bool bmsFault) {
 
 static void PACKSTAT_message(BMS_critical_info_t const *bms) {
     tx_header.StdId = PACKSTAT_ID;
-    tx_header.DLC = 6;
-    uint8_t PACKSTAT_DATA[6];
+    tx_header.DLC = 8;
+    uint8_t PACKSTAT_DATA[8];
 
     const uint16_t pack_voltage = bms->packVoltage;
     const uint16_t pack_current = bms->packCurrent;
@@ -953,6 +969,9 @@ static void PACKSTAT_message(BMS_critical_info_t const *bms) {
     PACKSTAT_DATA[3] = (uint8_t)(pack_current & 0xFF);
     PACKSTAT_DATA[4] = (uint8_t)((pack_power >> 8) & 0xFF);
     PACKSTAT_DATA[5] = (uint8_t)(pack_power & 0xFF);
+    PACKSTAT_DATA[6] = (uint8_t) (timeBetween & 0xFF);
+    PACKSTAT_DATA[7] = (uint8_t) error_cnt;
+
 
     transmit_can_message(&hcan1, &tx_header, PACKSTAT_DATA);
 }
