@@ -29,7 +29,8 @@ Checks: [
     -bugprone-easily-swappable-parameters,
     -readability-function-cognitive-complexity,
     -cppcoreguidelines-macro-to-enum,
-    -performance-no-int-to-ptr
+    -performance-no-int-to-ptr,
+    -cppcoreguidelines-avoid-magic-numbers
 ]
 
 # Use this line to only display warnings about identifier naming violations (useful for refactoring an existing codebase)
@@ -37,6 +38,13 @@ Checks: [
 
 CheckOptions:
     readability-function-size.LineThreshold: 100
+
+    readability-magic-numbers.IgnorePowersOf2IntegerValues: true
+    readability-magic-numbers.IgnoredIntegerValues: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, -1,
+        0xF, 0xF0, 0xF00, 0xF000, 0xF0000, 0xF00000, 0xF000000, 0xF0000000,
+        0xFF, 0xFFFF, 0xFFFFFFFF, 0xFF00, 0xFF0000, 0xFF000000, 0xFFFF0000
+    ]
     
     readability-identifier-length.IgnoredVariableNames: '(id|ID|i|j|k)'
     readability-identifier-length.IgnoredParameterNames: '(id|ID|i|j|k)'

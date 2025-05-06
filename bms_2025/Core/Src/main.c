@@ -48,20 +48,15 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define POLLING_ID 0x4E0
-#define CELLVAL_ID 0x780
-#define BMSSTAT_ID 0x781
-#define BMSVINF_ID 0x782
-#define BMSTINF_ID 0x783
-#define PACKSTAT_ID 0x180	
 #define CHARGER_OUT_ID 0x405
-#define CELL_VOLTAGE_FAULTS 0x785
-#define CELL_TEMP_FAULTS 0x786
 #define CAN_RX_MAILBOX_SIZE 3
 
 #define CHARGER_IN_ID 0x1806E5F4	// charger CAN ID is 0x1806E5F4
 #define CHARGER_INFO_ID 0x700
 #define CONSTANT_CAN_ENABLE 0
+
+#define BMS_RX_MSG_ID 0x0300
+#define BMS_RX_MSG_MASK 0x0E00
 
 
 #define BALANCE_EN  0
@@ -71,7 +66,7 @@
 #define DISCHARGE_THRESHOLD 65535 // well above cell max voltage LOOK AT ACTUAL FUNCTION CALL FOR THRESHOLD SETTING
 
 // CAN Manual Balancing
-#define MANUAL_BALANCING_ID 0x4E1
+#define MANUAL_BALANCING_ID 0x381 // TODO
 
 // CAN transmit timeout (ms)
 // Assuming a 0% bus load 500kbit/s CAN bus, 5ms would be enough time to send ~23 8 byte CAN messages
@@ -421,11 +416,11 @@ static void MX_CAN1_Init(void)
 	CAN_FilterTypeDef  sFilterConfig;
 	sFilterConfig.FilterBank = 0;
 	sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
-	sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
-	sFilterConfig.FilterIdHigh = 0x4E1 << 5;  // 0x4E1 shifted left by 5 bits
-	sFilterConfig.FilterIdLow = 0x0000;
-	sFilterConfig.FilterMaskIdHigh = 0xFFE0;
-	sFilterConfig.FilterMaskIdLow = 0x0000;
+	sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;
+	sFilterConfig.FilterIdHigh = BMS_RX_MSG_ID;
+	sFilterConfig.FilterIdLow = 0xFFFF;
+	sFilterConfig.FilterMaskIdHigh = BMS_RX_MSG_MASK;
+	sFilterConfig.FilterMaskIdLow = 0x0000; // (any uint16_t) & 0x0000 != 0xFFFF
 	sFilterConfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
 	sFilterConfig.FilterActivation = ENABLE;
 	sFilterConfig.SlaveStartFilterBank = 14;
@@ -1005,10 +1000,6 @@ void resetChargerVariables() {
 void getLaptopCanMessage(){
   HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
 
-  if (rx_header.StdId == POLLING_ID) {
-    pollingFlag = true;
-  }
-
   switch (rx_header.StdId) {
 	  case MANUAL_BALANCING_ID: // insert laptop to charger can id here
 		  manual_balancing_config.charge_en = (rx_data[0] == 0xFF);
@@ -1063,6 +1054,10 @@ void getLaptopCanMessage(){
 		  manual_balancing_config.valid_charge_message = true;
 		  charging_counter++;
 		  break;
+
+    case CAN_1_CPU_BMS_VIEWER_POLL_ID:
+      pollingFlag = true;
+      break;
 
 	  default:
 		  break;
