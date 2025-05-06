@@ -111,6 +111,9 @@ uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
 uint8_t charging_counter = 0;
 
+uint16_t poll_cell_temps = 0;
+uint16_t poll_cell_voltages = 0;
+
 bool bmsFault = 0;
 bool CHARGE_EN = 0;
 
@@ -126,10 +129,8 @@ GPIO_TypeDef* isoADC_SPI_cs_port_ptr_g = SPI_ADC_CS_GPIO_Port;
 uint16_t isoADC_SPI_cs_pin_g = GPIO_PIN_12;
 TIM_HandleTypeDef* isoADC_PWM_ptr_g = &htim3;
 uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
-isoADCConfig_t isoADCConfig;
-isoADCData_t isoADCData;
 BMS_critical_info_t BMSCriticalInfo;
-uint8_t isoADC_rdy_status = 0;
+uint8_t isoADC_rdy_status = 0, isoADC_period_miss = 0;
 
 
 /* USER CODE END PV */
@@ -209,7 +210,10 @@ int main(void)
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo);
     resetChargerVariables();
-    isoADC_rdy_status = wakeup_isoADC(&isoADCConfig, &isoADCData);
+//    isoADC_rdy_status = wakeup_isoADC(&gIsoADCConfig, &gIsoADCData);
+    HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+    isoADC_rdy_status = wakeup_isoADC(&gIsoADCConfig, &gIsoADCData);
+
 
     HAL_TIM_Base_Start_IT(&htim1);
 
@@ -224,9 +228,9 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
         // disable and enable IRQs before and after LTC6811 Transactions
-    	START_CRITICAL_SECTION;
-      writeConfigAll(&BMSConfig);
-      END_CRITICAL_SECTION;
+//    	START_CRITICAL_SECTION;
+//        writeConfigAll(&BMSConfig);
+//      END_CRITICAL_SECTION;
 
         /** FUNCTION CALL OVERVIEW
          * First: Call read6811 -> Voltages, Temps on 6811
@@ -235,20 +239,30 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-    	  START_CRITICAL_SECTION;
+    	if(poll_cell_voltages >= 500){
+    		poll_cell_voltages = 0;
+    		START_CRITICAL_SECTION;
+              writeConfigAll(&BMSConfig);
         readAllCellVoltages(bmsData);
         END_CRITICAL_SECTION;
 
         setCriticalVoltages(&BMSCriticalInfo, bmsData);
 
+    	}
+
 
         // Read all Temps from LTC6811, store them in 144x6 array,
         // set the critical info struct, then send temp info over CAN
-        START_CRITICAL_SECTION;
+       if(poll_cell_temps >= 2500){
+
+           poll_cell_temps = 0;
+    	START_CRITICAL_SECTION;
+                writeConfigAll(&BMSConfig);
         readAllCellTemps(bmsData);
-    	  END_CRITICAL_SECTION;
+        END_CRITICAL_SECTION;
 
         setCriticalTemps(&BMSCriticalInfo, bmsData);
+    }
 
         BMSConfig.UV_threshold = (CHARGE_EN == 0) 
             ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
@@ -271,9 +285,9 @@ int main(void)
              }
          }
 
-         read_isoADC_ADCs(&isoADCConfig, &isoADCData);
-        convert_raw_to_actual(&isoADCConfig, &isoADCData);
-        BMSCriticalInfo.packVoltage = (uint16_t)isoADCData.bus_voltage;
+//         read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
+//        convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
+        BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
 
         // poll for CAN1 Message from Laptop
         if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
@@ -823,13 +837,20 @@ uint32_t timeBetween = 0;
 uint8_t error_cnt = 0;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+
+    HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
+
     uint32_t new_t = HAL_GetTick();
     timeBetween = new_t - prevTime;
+    if(prevTime > 11){
+    	isoADC_period_miss++;
+    }
     prevTime = new_t;
-    isoADC_rdy_status = read_isoADC_ADCs(&isoADCConfig, &isoADCData);
-    error_cnt += isoADCData.ch0_drdy ? 0 : 1;
-    convert_raw_to_actual(&isoADCConfig, &isoADCData);
-    BMSCriticalInfo.packVoltage = (uint16_t)isoADCData.bus_voltage;
+    isoADC_rdy_status = read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
+    error_cnt += (uint8_t) (gIsoADCData.ch0_drdy ? 0 : 1);
+    convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
+    BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
+    HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
 //    PACKSTAT_message(&BMSCriticalInfo);
 }
 

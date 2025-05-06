@@ -231,5 +231,8 @@ extern uint16_t isoADC_SPI_cs_pin_g;
 extern TIM_HandleTypeDef* isoADC_PWM_ptr_g;
 extern uint32_t	isoADC_PWM_ch_g;
 
+extern isoADCConfig_t gIsoADCConfig;
+extern isoADCData_t gIsoADCData;
+
 
 #endif

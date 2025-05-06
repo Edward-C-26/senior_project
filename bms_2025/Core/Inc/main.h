@@ -58,6 +58,8 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 extern SPI_HandleTypeDef* ltc_spi;
+extern uint16_t poll_cell_temps;
+extern uint16_t poll_cell_voltages;
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
