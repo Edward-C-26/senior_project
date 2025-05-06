@@ -131,7 +131,7 @@ TIM_HandleTypeDef* isoADC_PWM_ptr_g = &htim3;
 uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
 BMS_critical_info_t BMSCriticalInfo;
 uint8_t isoADC_rdy_status = 0, isoADC_period_miss = 0;
-
+uint32_t cell_volt_timing = 0, cell_temp_timing = 0;
 
 /* USER CODE END PV */
 
@@ -239,11 +239,13 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-    	if(poll_cell_voltages >= 500){
+    	if(poll_cell_voltages >= 1000){
     		poll_cell_voltages = 0;
     		START_CRITICAL_SECTION;
+    		uint32_t start_time = HAL_GetTick();
               writeConfigAll(&BMSConfig);
         readAllCellVoltages(bmsData);
+        cell_volt_timing = HAL_GetTick() - start_time;
         END_CRITICAL_SECTION;
 
         setCriticalVoltages(&BMSCriticalInfo, bmsData);
@@ -257,8 +259,12 @@ int main(void)
 
            poll_cell_temps = 0;
     	START_CRITICAL_SECTION;
+
+		uint32_t start_time = HAL_GetTick();
                 writeConfigAll(&BMSConfig);
         readAllCellTemps(bmsData);
+
+        cell_temp_timing = HAL_GetTick() - start_time;
         END_CRITICAL_SECTION;
 
         setCriticalTemps(&BMSCriticalInfo, bmsData);

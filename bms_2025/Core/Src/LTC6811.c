@@ -68,7 +68,7 @@ uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by 
 //! @param address is the address used to pass into our config file 
 //! @returns none 
 void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
-	uint8_t config[6];
+//	uint8_t config[6];
 	uint8_t cmd[12];
 	uint16_t PEC_return;
 	uint8_t dummy[8];
@@ -89,6 +89,13 @@ void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	cmd[3] = (uint8_t)(PEC_return & 0xFF);
 
 	memcpy(&cmd[4], config, 6 * sizeof(config[0]));
+
+//	cmd[4] = (uint8_t)((cfg->GPIO5PulldownOff << 7) | (cfg->GPIO4PulldownOff << 6) | (cfg->GPIO3PulldownOff << 5) | (cfg->GPIO2PulldownOff << 4) | (cfg->GPIO1PulldownOff << 3) | (cfg->ReferenceOn << 2) | (cfg->ADCModeOption));
+//	cmd[5] = (uint8_t)(cfg->UndervoltageComparisonVoltage & 0xFF);
+//	cmd[6] = (uint8_t)(((cfg->OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg->UndervoltageComparisonVoltage >> 8) & 0x0F));
+//	cmd[7] = (uint8_t)((cfg->OvervoltageComparisonVoltage >> 4) & 0xFF);
+//	cmd[8] = (uint8_t)((cfg->DischargeCell[7] << 7) | (cfg->DischargeCell[6] << 6) | (cfg->DischargeCell[5] << 5) | (cfg->DischargeCell[4] << 4) | (cfg->DischargeCell[3] << 3) | (cfg->DischargeCell[2] << 2) | (cfg->DischargeCell[1] << 1) | (cfg->DischargeCell[0]));
+//	cmd[9] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[11] << 3) | (cfg->DischargeCell[10] << 2) | (cfg->DischargeCell[9] << 1) | (cfg->DischargeCell[8]));
 
 	PEC_return = calculatePEC(6, cmd + 4);
 
