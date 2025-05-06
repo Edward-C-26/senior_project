@@ -251,15 +251,6 @@
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
-	<storageModule moduleId="scannerConfiguration">
-		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.72344017;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.72344017.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.2113531212;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.1529928596">
-			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.2070720910;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.2070720910.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.454321693;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.270275277">
-			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-	</storageModule>
 	<storageModule moduleId="refreshScope" versionNumber="2">
 		<configuration configurationName="Multiple configurations">
 			<resource resourceType="PROJECT" workspacePath="/bms_2025"/>
@@ -271,4 +262,5 @@
 			<resource resourceType="PROJECT" workspacePath="/BMS_Driving_Car_2024"/>
 		</configuration>
 	</storageModule>
+	<storageModule moduleId="scannerConfiguration"/>
 </cproject>

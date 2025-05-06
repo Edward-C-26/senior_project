@@ -115,8 +115,6 @@ extern SPI_HandleTypeDef* ltc_spi;
 #define SPI_FERAM_MISO_GPIO_Port GPIOC
 #define SPI_FERAM_MOSI_Pin GPIO_PIN_12
 #define SPI_FERAM_MOSI_GPIO_Port GPIOC
-#define SPI_FERAM_WP_Pin GPIO_PIN_2
-#define SPI_FERAM_WP_GPIO_Port GPIOD
 #define IMD_DIAGNOSTIC_Pin GPIO_PIN_3
 #define IMD_DIAGNOSTIC_GPIO_Port GPIOB
 
