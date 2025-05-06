@@ -1021,6 +1021,10 @@ void resetChargerVariables() {
 void getLaptopCanMessage(){
   HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
 
+  if (rx_header.StdId == CAN_1_CPU_BMS_VIEWER_POLL_ID) {
+	  pollingFlag = true;
+  }
+
   switch (rx_header.StdId) {
 	  case MANUAL_BALANCING_ID: // insert laptop to charger can id here
 		  manual_balancing_config.charge_en = (rx_data[0] == 0xFF);
@@ -1075,10 +1079,6 @@ void getLaptopCanMessage(){
 		  manual_balancing_config.valid_charge_message = true;
 		  charging_counter++;
 		  break;
-
-    case CAN_1_CPU_BMS_VIEWER_POLL_ID:
-      pollingFlag = true;
-      break;
 
 	  default:
 		  break;
