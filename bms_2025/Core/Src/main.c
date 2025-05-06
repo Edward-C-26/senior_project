@@ -129,6 +129,7 @@ uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
 isoADCConfig_t isoADCConfig;
 isoADCData_t isoADCData;
 BMS_critical_info_t BMSCriticalInfo;
+uint8_t isoADC_rdy_status = 0;
 
 
 /* USER CODE END PV */
@@ -208,7 +209,7 @@ int main(void)
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo);
     resetChargerVariables();
-    wakeup_isoADC(&isoADCConfig, &isoADCData);
+    isoADC_rdy_status = wakeup_isoADC(&isoADCConfig, &isoADCData);
 
     HAL_TIM_Base_Start_IT(&htim1);
 
@@ -613,12 +614,12 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 15;
+  htim1.Init.Prescaler = 3;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 9999;
+  htim1.Init.Period = 39999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
@@ -710,7 +711,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -733,7 +734,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -836,7 +837,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     uint32_t new_t = HAL_GetTick();
     timeBetween = new_t - prevTime;
     prevTime = new_t;
-    read_isoADC_ADCs(&isoADCConfig, &isoADCData);
+    isoADC_rdy_status = read_isoADC_ADCs(&isoADCConfig, &isoADCData);
     error_cnt += isoADCData.ch0_drdy ? 0 : 1;
     convert_raw_to_actual(&isoADCConfig, &isoADCData);
     BMSCriticalInfo.packVoltage = (uint16_t)isoADCData.bus_voltage;

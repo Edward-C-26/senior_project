@@ -308,12 +308,12 @@ uint8_t read_isoADC_ADCs(isoADCConfig_t const* cfg_ptr, isoADCData_t* data_ptr) 
 	HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI2_NSS low to turn chip on
 
 	// send command through SPI and store into initialBuffer
-	HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 1000);
+	HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 5);
 
 	// this while loop should only occur on startup to manage how DRDY bits are cleared
 	while (((response_buffer[1] & 0x01) != 0x01) || ((response_buffer[1] & 0x02) != 0x02) || ((response_buffer[1] & 0x04) != 0x04)) {
 		abort_counter++;
-		status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 1000);
+		status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 5);
 
 		// each abort_counter increment is a failed ADC read (data is not ready)
 		if (abort_counter > 100) {
