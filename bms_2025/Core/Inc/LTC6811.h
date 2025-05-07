@@ -58,5 +58,7 @@ bool readRegister(CommandCodeTypedef command, uint8_t address, uint16_t *data);
 void sendBroadcastCommand(CommandCodeTypedef command);
 void sendAddressCommand(CommandCodeTypedef command, uint8_t address);
 uint16_t calculatePEC(uint8_t len, uint8_t *data);
+bool poll_single_secondary_voltage_reading(uint8_t board_addr, BMSConfigStructTypedef *cfg, CellData bmsData[144]);
+bool poll_single_secondary_temp_reading(uint8_t board_addr, BMSConfigStructTypedef *cfg, CellData bmsData[144]);
 
 #endif	// LTC6811_NO_MALLOCS_H

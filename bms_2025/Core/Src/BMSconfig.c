@@ -78,10 +78,11 @@ void loadConfig(BMSConfigStructTypedef* cfg) {
 	// cfg->lowerCurrent = 0x000A;    // 1.0A
 	// cfg->chargerVoltage = 0x1770;  // 600.0V
 
-	// 0: 422Hz, 1: 27kHz, 2: 7kHz, 3: 26Hz, 4: 1kHz, 5: 14kHz, 6: 3kHz, 7: 2kHz
-	cfg->ADCConversionRate = 0;
 
-	cfg->ADCModeOption = 1; // How TF is this calculated?????
+	// this is used to set the adc rate in the ADCV command
+	cfg->ADCConversionRate = 0;
+	// this sets ADCOPT(CFGR0[0]), see pg 61 for more details
+	cfg->ADCModeOption = 0; // How TF is this calculated?????
 
 	// chip and code should share OV and UV thresholds
 
