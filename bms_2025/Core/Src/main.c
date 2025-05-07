@@ -863,6 +863,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
     BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
     HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+    __HAL_TIM_SET_COUNTER(&htim1, 0);
 //    PACKSTAT_message(&BMSCriticalInfo);
 }
 

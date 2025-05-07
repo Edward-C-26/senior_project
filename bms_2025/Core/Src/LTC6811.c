@@ -432,7 +432,7 @@ void inline wakeup_idle() {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
-bool poll_single_secondary_voltage_reading(uint8_t board_addr, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
+bool poll_single_secondary_voltage_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
 	uint16_t boardVoltage[12];
 	bool PEC_check[12]	;
 	bool dataValid = true;
@@ -441,7 +441,7 @@ bool poll_single_secondary_voltage_reading(uint8_t board_addr, BMSConfigStructTy
 
 	wakeup_idle();
 //	START_CRITICAL_SECTION;
-	writeConfigAddress(cfg, cfg->address[board_addr]); // do we need to do this every time?
+	writeConfigAddress(cfg, cfg->address[board_num]); // do we need to do this every time?
 	// do readAllCellVoltages
 //	wakeup_idle();
 //	HAL_Delay(2);
@@ -455,29 +455,29 @@ bool poll_single_secondary_voltage_reading(uint8_t board_addr, BMSConfigStructTy
 
 //	START_CRITICAL_SECTION;
 	// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
-	PEC_check[board_addr] = readCellVoltage(board_addr, boardVoltage);
+	PEC_check[board_num] = readCellVoltage(board_num, boardVoltage);
 //	END_CRITICAL_SECTION;
 
-	dataValid &= PEC_check[board_addr];
+	dataValid &= PEC_check[board_num];
 
 	// store cell number and valid data bit in bmsData
 	for (uint8_t cell = 0; cell < NUM_BOARDS; cell++) {
-		bmsData[(board_addr * NUM_BOARDS) + cell].voltage = (uint8_t)((board_addr * NUM_BOARDS) + cell + 1);  // cell number
+		bmsData[(board_num * NUM_BOARDS) + cell].voltage = (uint8_t)((board_num * NUM_BOARDS) + cell + 1);  // cell number
 
-		if (!PEC_check[board_addr]) {
-			bmsData[(board_addr * NUM_BOARDS) + cell].fault |= CELL_PEC_FAIL_MASK;
+		if (!PEC_check[board_num]) {
+			bmsData[(board_num * NUM_BOARDS) + cell].fault |= CELL_PEC_FAIL_MASK;
 		} else {
-			bmsData[(board_addr * NUM_BOARDS) + cell].fault &= (uint8_t)(~CELL_PEC_FAIL_MASK);
+			bmsData[(board_num * NUM_BOARDS) + cell].fault &= (uint8_t)(~CELL_PEC_FAIL_MASK);
 		}
 
-		bmsData[(board_addr * NUM_BOARDS) + cell].voltage = boardVoltage[cell];
+		bmsData[(board_num * NUM_BOARDS) + cell].voltage = boardVoltage[cell];
 	}
 
 	return dataValid;
 
 }
 
-bool poll_single_secondary_temp_reading(uint8_t board_addr, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
+bool poll_single_secondary_temp_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
 
 	// do writeConfigAll(&BMSConfig);
 	uint16_t boardTemp[4];
@@ -489,7 +489,7 @@ bool poll_single_secondary_temp_reading(uint8_t board_addr, BMSConfigStructTyped
 	wakeup_idle();
 
 //	START_CRITICAL_SECTION;
-	writeConfigAddress(cfg, cfg->address[board_addr]); // do we need to do this every time?
+	writeConfigAddress(cfg, cfg->address[board_num]); // do we need to do this every time?
 	// do readAllCellTemps(bmsData);
 //	wakeup_idle();
 //	HAL_Delay(2);
@@ -505,32 +505,32 @@ bool poll_single_secondary_temp_reading(uint8_t board_addr, BMSConfigStructTyped
 
 //	START_CRITICAL_SECTION;
 	// read temperature, check for OT and temp DC
-	PEC_check[board_addr] = readCellTemp(board_addr, boardTemp, boardDCFault, boardTempFault);
+	PEC_check[board_num] = readCellTemp(board_num, boardTemp, boardDCFault, boardTempFault);
 //	END_CRITICAL_SECTION;
 
-	dataValid &= PEC_check[board_addr];
+	dataValid &= PEC_check[board_num];
 
 	// store OT and temp DC bits in status byte
 	for (uint8_t cell = 0; cell < 12; cell++) {
-		if (!PEC_check[board_addr]) {
-			bmsData[(board_addr * 12) + cell].fault |= CELL_PEC_FAIL_MASK;
+		if (!PEC_check[board_num]) {
+			bmsData[(board_num * 12) + cell].fault |= CELL_PEC_FAIL_MASK;
 		} else {
-			bmsData[(board_addr * 12) + cell].fault &= (uint8_t)(~CELL_PEC_FAIL_MASK);
+			bmsData[(board_num * 12) + cell].fault &= (uint8_t)(~CELL_PEC_FAIL_MASK);
 		}
 
 		if (boardTempFault[cell / 3]) {
-			bmsData[(board_addr * 12) + cell].fault |= CELL_TEMP_FAIL_MASK;
+			bmsData[(board_num * 12) + cell].fault |= CELL_TEMP_FAIL_MASK;
 		} else {
-			bmsData[(board_addr * 12) + cell].fault &= (uint8_t)(~CELL_TEMP_FAIL_MASK);	// set OT bit
+			bmsData[(board_num * 12) + cell].fault &= (uint8_t)(~CELL_TEMP_FAIL_MASK);	// set OT bit
 		}
 
 		if (boardDCFault[cell / 3]) {
-			bmsData[(board_addr * 12) + cell].fault |= CELL_DCFAULT_MASK;
+			bmsData[(board_num * 12) + cell].fault |= CELL_DCFAULT_MASK;
 		} else {
-			bmsData[(board_addr * 12) + cell].fault &= (uint8_t)(~CELL_DCFAULT_MASK);
+			bmsData[(board_num * 12) + cell].fault &= (uint8_t)(~CELL_DCFAULT_MASK);
 		}
 
-		bmsData[(board_addr * 12) + cell].temperature = boardTemp[cell / 3];
+		bmsData[(board_num * 12) + cell].temperature = boardTemp[cell / 3];
 	}
 
 	return dataValid;

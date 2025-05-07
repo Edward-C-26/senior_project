@@ -207,19 +207,21 @@ uint8_t read_isoADC_register(isoADCRegisterAddr_e address, uint8_t* response_buf
     null_word[1] = (uint8_t)(NULL_CMD & 0x00FF);
     null_word[2] = 0x00;
 
-    START_CRITICAL_SECTION;
+
     // wake up chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI2_NSS low to turn chip on
 
+    START_CRITICAL_SECTION;
     // send command through SPI and store into dataBuffer
-    HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, initialBuffer, sizeof(cmd_word), 1000);
+    HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, initialBuffer, sizeof(cmd_word), SPI_WAIT_TIME);
 
     // send second command to get response
-    HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 1000);
+    HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
+    END_CRITICAL_SECTION;
 
     // sleep chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET); // pull SPI2_NSS low to turn chip on
-    END_CRITICAL_SECTION;
+
 
     return (uint8_t)((status1 == HAL_OK) && (status2 == HAL_OK));
 }
@@ -251,19 +253,19 @@ uint8_t write_isoADC_register(isoADCRegisterAddr_e address, uint8_t* response_bu
 	null_word[1] = (uint8_t)(NULL_CMD & 0x00FF);
 	null_word[2] = 0x00;
 
-    START_CRITICAL_SECTION;
+
     // wake up chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI3_NSS low to turn chip on
-
+    START_CRITICAL_SECTION;
     // send command through SPI and store into dataBuffer
-    HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, dummy_buffer, sizeof(cmd_word), 1000);
+    HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, dummy_buffer, sizeof(cmd_word), SPI_WAIT_TIME);
 
     // send second command to get response
-    HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 1000);
-
+    HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
+    END_CRITICAL_SECTION;
     // sleep chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET); // pull SPI3_NSS low to turn chip on
-    END_CRITICAL_SECTION;
+
 
     return (uint8_t)((status1 == HAL_OK) && (status2 == HAL_OK));
 }
@@ -304,18 +306,19 @@ uint8_t read_isoADC_ADCs(isoADCConfig_t const* cfg_ptr, isoADCData_t* data_ptr) 
 
 	// SPI Transaction
 
-    START_CRITICAL_SECTION;
+
 	// wake up chip
 	HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI2_NSS low to turn chip on
-
+	START_CRITICAL_SECTION;
 	// send command through SPI and store into initialBuffer
 	HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
-
+	END_CRITICAL_SECTION;
 	// this while loop should only occur on startup to manage how DRDY bits are cleared
 	while (((response_buffer[1] & 0x01) != 0x01) || ((response_buffer[1] & 0x02) != 0x02) || ((response_buffer[1] & 0x04) != 0x04)) {
 		abort_counter++;
+		START_CRITICAL_SECTION;
 		status1 |= HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
-
+		END_CRITICAL_SECTION;
 		// each abort_counter increment is a failed ADC read (data is not ready)
 		if (abort_counter > 100) {
 			data_ptr->abort_fault = true;
@@ -325,7 +328,7 @@ uint8_t read_isoADC_ADCs(isoADCConfig_t const* cfg_ptr, isoADCData_t* data_ptr) 
 
 	// sleep chip
 	HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET); // pull SPI2_NSS low to turn chip on
-    END_CRITICAL_SECTION;
+
 
 	// set DRDY bits from response
 	bool ch0_drdy = (response_buffer[1] & 0x01) == 0x01;	// CH0
@@ -424,12 +427,14 @@ uint8_t write_isoADC_reg_with_crc(isoADCRegisterAddr_e address, uint8_t* respons
 
     uint8_t null_word[XMISSION_SIZE] = {0x00, 0x00, 0x00}; 
 
-    START_CRITICAL_SECTION;
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET);
+
+    START_CRITICAL_SECTION;
     HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, dummy_buffer, sizeof(cmd_word), 1000);
     HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, dummy_buffer, sizeof(null_word), 1000);
-    HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET);
     END_CRITICAL_SECTION;
+
+    HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET);
 
     return (uint8_t)((status1 == HAL_OK) && (status2 == HAL_OK));
 }
