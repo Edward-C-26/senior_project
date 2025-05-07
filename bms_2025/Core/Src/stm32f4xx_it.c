@@ -206,12 +206,20 @@ void SysTick_Handler(void)
 void TIM1_UP_TIM10_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 0 */
+	if(((htim1.Instance->SR) & (TIM_FLAG_UPDATE))
+				== (TIM_FLAG_UPDATE)){
+			if(((htim1.Instance->DIER) & (TIM_IT_UPDATE))
+					== (TIM_IT_UPDATE)){
+				__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
+				HAL_TIM_PeriodElapsedCallback(&htim1);
+			}
+		}
 
-//	if(0){
+	if(0){
   /* USER CODE END TIM1_UP_TIM10_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */
-//	}
+	}
   /* USER CODE END TIM1_UP_TIM10_IRQn 1 */
 }
 

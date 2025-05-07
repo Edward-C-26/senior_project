@@ -130,7 +130,7 @@ uint16_t isoADC_SPI_cs_pin_g = GPIO_PIN_12;
 TIM_HandleTypeDef* isoADC_PWM_ptr_g = &htim3;
 uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
 BMS_critical_info_t BMSCriticalInfo;
-uint8_t isoADC_rdy_status = 0, isoADC_period_miss = 0;
+uint8_t isoADC_rdy_status = 0, isoADC_period_miss = 0, max_isoADC_period = 0;
 uint32_t cell_volt_timing = 0, cell_temp_timing = 0, volt_start_time = 0, temp_start_time = 0;
 
 /* USER CODE END PV */
@@ -825,8 +825,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DEBUG_LED_Pin SPI_UCOMM_CS_Pin SPI_FERAM_CS_Pin */
-  GPIO_InitStruct.Pin = DEBUG_LED_Pin|SPI_UCOMM_CS_Pin|SPI_FERAM_CS_Pin;
+  /*Configure GPIO pin : DEBUG_LED_Pin */
+  GPIO_InitStruct.Pin = DEBUG_LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(DEBUG_LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SPI_UCOMM_CS_Pin SPI_FERAM_CS_Pin */
+  GPIO_InitStruct.Pin = SPI_UCOMM_CS_Pin|SPI_FERAM_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -854,9 +861,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
     uint32_t new_t = HAL_GetTick();
     timeBetween = new_t - prevTime;
-    if(prevTime > 11){
+    if(timeBetween >= 11){
     	isoADC_period_miss++;
+    	if(timeBetween > max_isoADC_period){
+			max_isoADC_period = (uint8_t) timeBetween;
+		}
     }
+
     prevTime = new_t;
     isoADC_rdy_status = read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
     error_cnt += (uint8_t) (gIsoADCData.ch0_drdy ? 0 : 1);
