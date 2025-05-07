@@ -57,7 +57,7 @@
 #define CONSTANT_CAN_ENABLE 0
 
 #define BMS_RX_MSG_ID 0x0300
-#define BMS_RX_MSG_MASK 0x0E00
+#define BMS_RX_MSG_MASK 0x0F00
 
 
 #define BALANCE_EN  0
@@ -73,7 +73,7 @@
 // Assuming a 0% bus load 500kbit/s CAN bus, 5ms would be enough time to send ~23 8 byte CAN messages
 // If we hit the 5ms timeout without transmitting any pending messages, we're either at an extremely high bus load
 // and losing arbitration or there's some other issue (bus disconnected, no termination, etc.)
-#define CAN_TX_TIMEOUT 5
+#define CAN_TX_TIMEOUT 2
 
 
 /* USER CODE END PD */
@@ -94,14 +94,16 @@ SPI_HandleTypeDef hspi3;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim7;
+TIM_HandleTypeDef htim13;
 
 /* USER CODE BEGIN PV */
 SPI_HandleTypeDef *ltc_spi = &hspi1;
 
 CAN_TxHeaderTypeDef tx_header;
-CAN_RxHeaderTypeDef rx_header;
+volatile CAN_RxHeaderTypeDef rx_header;
 uint8_t tx_data[8];
-uint8_t rx_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+volatile uint8_t rx_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint32_t tx_mailbox;
 
 CAN_TxHeaderTypeDef charger_tx_header;
@@ -109,12 +111,11 @@ uint8_t charger_tx_data[8];
 uint8_t charge_rate = 2;
 uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
-uint8_t charging_counter = 0;
+uint8_t charging_msg_timeout = 1;
 
 uint16_t poll_cell_temps = 0;
 uint16_t poll_cell_voltages = 0;
 
-bool bmsFault = 0;
 bool CHARGE_EN = 0;
 
 CellData bmsData[144];
@@ -122,7 +123,8 @@ uint8_t BMS_STATUS[6];
 bool discharge[12][12];
 bool full_discharge[12][12];
 
-manual_balancing_t manual_balancing_config;
+volatile manual_balancing_t manual_balancing_config;
+volatile bool bmsFault;
 
 SPI_HandleTypeDef* isoADC_SPI_ptr_g = &hspi2;
 GPIO_TypeDef* isoADC_SPI_cs_port_ptr_g = SPI_ADC_CS_GPIO_Port;
@@ -132,6 +134,16 @@ uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
 BMS_critical_info_t BMSCriticalInfo;
 uint8_t isoADC_rdy_status = 0, isoADC_period_miss = 0, max_isoADC_period = 0;
 uint32_t cell_volt_timing = 0, cell_temp_timing = 0, volt_start_time = 0, temp_start_time = 0;
+
+volatile bool pollingFlag = false;
+volatile uint8_t new_balance_msg = 0, can_tx_phase = 0;
+volatile uint8_t balancing_data_array[8];
+
+
+uint32_t prevTime = 0, timeBetween = 0;
+uint8_t error_cnt = 0;
+
+
 
 /* USER CODE END PV */
 
@@ -146,6 +158,8 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_TIM7_Init(void);
+static void MX_TIM13_Init(void);
 /* USER CODE BEGIN PFP */
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]);
 static void transmit_cell_data_msg(CellData const bmsData[144]);
@@ -158,8 +172,7 @@ static void transmit_cell_temp_msg(BMS_critical_info_t const *bms);
 // Manual Charging/Balancing Functions
 void CHARGER_message();
 void resetChargerVariables();
-void getLaptopCanMessage();
-bool pollingFlag = false;
+void process_balancing_msg();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -205,6 +218,8 @@ int main(void)
   MX_TIM3_Init();
   MX_CAN2_Init();
   MX_TIM1_Init();
+  MX_TIM7_Init();
+  MX_TIM13_Init();
   /* USER CODE BEGIN 2 */
     initPECTable();
     loadConfig(&BMSConfig);
@@ -217,6 +232,10 @@ int main(void)
 
     // turn on timer interrupt for isoADC 128Hz
     HAL_TIM_Base_Start_IT(&htim1);
+    // Sending CAN messages
+    HAL_TIM_Base_Start_IT(&htim7);
+    // Sending cell polling message
+    HAL_TIM_Base_Start_IT(&htim13);
 
   /* USER CODE END 2 */
 
@@ -227,11 +246,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-        // disable and enable IRQs before and after LTC6811 Transactions
-//    	START_CRITICAL_SECTION;
-//        writeConfigAll(&BMSConfig);
-//      END_CRITICAL_SECTION;
 
         /** FUNCTION CALL OVERVIEW
          * First: Call read6811 -> Voltages, Temps on 6811
@@ -283,7 +297,7 @@ int main(void)
 
         /* DO THIS WHEN TESTING BMS FAULTS*/    
         //*NOTE* : need to figure out which pin is the BMS fault pin
-         bool bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+        bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
          if (bmsFault == false) {
         	 global_error_count = 0;
         	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
@@ -298,26 +312,16 @@ int main(void)
              }
          }
 
-//         read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
-//        convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
         BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
 
-        // poll for CAN1 Message from Laptop
-        if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
-        	getLaptopCanMessage();
+    	DISABLE_CAN1_RX_FIF0_IRQ;
+        if(new_balance_msg){
+        	process_balancing_msg();
+        	new_balance_msg = 0;
+        }
+    	ENABLE_CAN1_RX_FIF0_IRQ;
 
-            int messagesDiscarded = 0;
-			// Clear the receive FIFO0 by reading and discarding all messages
-			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0
-                    || messagesDiscarded < CAN_RX_MAILBOX_SIZE)
-			{
-				// Retrieve and discard the message
-				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
-                messagesDiscarded++;
-			}
-    	}
-
-        // Discharge cells if charge message is valid AND discharge is enabled AND there is no BMS fault
+    	// Discharge cells if charge message is valid AND discharge is enabled AND there is no BMS fault
         if((manual_balancing_config.valid_charge_message == true) &&
 			(manual_balancing_config.discharge_balance_en == true) &&
 			(bmsFault == false)) {
@@ -336,29 +340,17 @@ int main(void)
 
         // send CAN messages to charger
         // if charge message from laptop is valid AND charge is enabled AND there is no BMS fault
-        if ((manual_balancing_config.valid_charge_message == true) &&
-			(manual_balancing_config.charge_en == true) &&
-			(!bmsFault == true)) {
-        	CHARGER_message();
-        }
+//        if ((manual_balancing_config.valid_charge_message == true) &&
+//			(manual_balancing_config.charge_en == true) &&
+//			(!bmsFault == true)) {
+//        	CHARGER_message();
+//        }
 
         // stop messages from being sent if no message has been sent in 2 seconds
-        if (charging_counter > 4) {
+        if (charging_msg_timeout == 1) {
         	resetChargerVariables();
         }
-        charging_counter++;
 
-        // Send remaining CAN messages
-        transmit_cell_vlt_msg(&BMSCriticalInfo);    
-        transmit_cell_temp_msg(&BMSCriticalInfo);
-        transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
-        // PACKSTAT_message(&BMSCriticalInfo);
-        // PACKSTAT_message(&BMSCriticalInfo);
-
-      if (pollingFlag || CONSTANT_CAN_ENABLE){
-        transmit_cell_data_msg(bmsData);
-        pollingFlag = false;
-      }
     }
 
 
@@ -463,10 +455,10 @@ static void MX_CAN1_Init(void)
   }
 
   // This ties the interupt to the rx_fifo0 msg bufer
-//  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-//   {
-//     Error_Handler();
-//   }
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+   {
+     Error_Handler();
+   }
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -776,6 +768,75 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 0;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 31999;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
+
+}
+
+/**
+  * @brief TIM13 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM13_Init(void)
+{
+
+  /* USER CODE BEGIN TIM13_Init 0 */
+
+  /* USER CODE END TIM13_Init 0 */
+
+  /* USER CODE BEGIN TIM13_Init 1 */
+
+  /* USER CODE END TIM13_Init 1 */
+  htim13.Instance = TIM13;
+  htim13.Init.Prescaler = 495;
+  htim13.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim13.Init.Period = 64515;
+  htim13.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim13.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim13) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM13_Init 2 */
+
+  /* USER CODE END TIM13_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -852,32 +913,85 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-uint32_t prevTime = 0;
-uint32_t timeBetween = 0;
-uint8_t error_cnt = 0;
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, (CAN_RxHeaderTypeDef *) &rx_header, (uint8_t*) rx_data);
+
+	switch(rx_header.StdId){
+		case CAN_1_CPU_BMS_VIEWER_POLL_ID:
+			pollingFlag = true;
+			break;
+		case MANUAL_BALANCING_ID:
+			new_balance_msg = 1;
+			for(int i = 0; i < rx_header.DLC; i++){
+				balancing_data_array[i] = rx_data[i];
+			}
+			break;
+		default:
+			if(rx_header.StdId == 0x501){
+				__NOP();
+			}
+			break;
+	}
+}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if(htim == &htim1){
+		HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
 
-    HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
-
-    uint32_t new_t = HAL_GetTick();
-    timeBetween = new_t - prevTime;
-    if(timeBetween >= 11){
-    	isoADC_period_miss++;
-    	if(timeBetween > max_isoADC_period){
-			max_isoADC_period = (uint8_t) timeBetween;
+		uint32_t new_t = HAL_GetTick();
+		timeBetween = new_t - prevTime;
+		if(timeBetween >= 11){
+			isoADC_period_miss++;
+			if(timeBetween > max_isoADC_period){
+				max_isoADC_period = (uint8_t) timeBetween;
+			}
 		}
-    }
 
-    prevTime = new_t;
-    isoADC_rdy_status = read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
-    error_cnt += (uint8_t) (gIsoADCData.ch0_drdy ? 0 : 1);
-    convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
-    BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
-    HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
-//    __HAL_TIM_SET_COUNTER(&htim1, 0);/
-    // send packstat message
-//    PACKSTAT_message(&BMSCriticalInfo);
+		prevTime = new_t;
+		isoADC_rdy_status = read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
+		error_cnt += (uint8_t) (gIsoADCData.ch0_drdy ? 0 : 1);
+		convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
+		BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
+		transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
+		HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+
+	}
+}
+
+void send_can_msg_from_irq(){
+	can_tx_phase++;
+	switch(can_tx_phase){
+		case 1:
+			transmit_cell_vlt_msg(&BMSCriticalInfo);
+			break;
+		case 2:
+//			transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
+			break;
+		case 3:
+			transmit_cell_temp_msg(&BMSCriticalInfo);
+			break;
+		case 4:
+			if ((manual_balancing_config.valid_charge_message == true) &&
+				(manual_balancing_config.charge_en == true) &&
+				(!bmsFault == true)) {
+				CHARGER_message();
+			}
+			break;
+		case 5:
+			can_tx_phase = 0;
+			break;
+	}
+}
+
+void send_cell_vals_polling(){
+	// Reread 391 to see if this is bad
+	DISABLE_ALL_CAN_IRQS
+	if (pollingFlag || CONSTANT_CAN_ENABLE){
+		transmit_cell_data_msg(bmsData);
+		pollingFlag = false;
+	}
+	charging_msg_timeout = 1;
+	ENABLE_ALL_CAN_IRQS
 }
 
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]) {
@@ -1055,77 +1169,54 @@ void resetChargerVariables() {
 	manual_balancing_config.valid_charge_message = false;	// assume invalid message
 }
 
-void getLaptopCanMessage(){
-  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
+void process_balancing_msg(){
+	manual_balancing_config.charge_en = (balancing_data_array[0] == 0xFF);
+	manual_balancing_config.charge_voltage = ((balancing_data_array[1] << 8) | (balancing_data_array[2]));
+	manual_balancing_config.charge_current = ((balancing_data_array[3] << 8) | (balancing_data_array[4]));
 
-  if (rx_header.StdId == CAN_1_CPU_BMS_VIEWER_POLL_ID) {
-	  pollingFlag = true;
-  }
+	manual_balancing_config.discharge_balance_en = (balancing_data_array[5] & 0xF0) == 0xF0;
+	manual_balancing_config.num_cells_discharged_per_secondary = (balancing_data_array[5] & 0x0F);
+	manual_balancing_config.discharge_threshold_voltage = ((balancing_data_array[6] << 8) | (balancing_data_array[7]));
 
-  switch (rx_header.StdId) {
-	  case MANUAL_BALANCING_ID: // insert laptop to charger can id here
-		  manual_balancing_config.charge_en = (rx_data[0] == 0xFF);
-		  manual_balancing_config.charge_voltage = ((rx_data[1] << 8) | (rx_data[2]));
-		  manual_balancing_config.charge_current = ((rx_data[3] << 8) | (rx_data[4]));
+	// check for validity
 
-		  manual_balancing_config.discharge_balance_en = (rx_data[5] & 0xF0) == 0xF0;
-		  manual_balancing_config.num_cells_discharged_per_secondary = (rx_data[5] & 0x0F);
-		  manual_balancing_config.discharge_threshold_voltage = ((rx_data[6] << 8) | (rx_data[7]));
+	// if both charge and balance are enabled, invalid message
+	if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.discharge_balance_en == true)) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // check for validity
+	// if charge is enabled AND if charge voltage is out of bounds [500-600][V]
+	// multiplied by 10 -> [5000 - 6000]
+	if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_voltage < 5000) || (manual_balancing_config.charge_voltage > 6000))) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if both charge and balance are enabled, invalid message
-		  if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.discharge_balance_en == true)) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if charge is enabled AND if charge current is out of bounds [0-10][A]
+	// multiplied by 10 -> [0 - 100]
+	if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.charge_current > 100)) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if charge is enabled AND if charge voltage is out of bounds [500-600][V]
-		  // multiplied by 10 -> [5000 - 6000]
-		  if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_voltage < 5000) || (manual_balancing_config.charge_voltage > 6000))) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if cell discharge count is out of bounds
+	if ((manual_balancing_config.discharge_balance_en == true) && (manual_balancing_config.num_cells_discharged_per_secondary > 12)) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if charge is enabled AND if charge current is out of bounds [0-10][A]
-		  // multiplied by 10 -> [0 - 100]
-		  if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.charge_current > 100)) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if discharge is enabled AND if discharge cell threshold is out of bounds [3.2-4.2][V]
+	// multiplied by 10,000 -> [32000 - 42000]
+	if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.discharge_threshold_voltage < 32000) || (manual_balancing_config.discharge_threshold_voltage > 42000))) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if cell discharge count is out of bounds
-		  if ((manual_balancing_config.discharge_balance_en == true) && (manual_balancing_config.num_cells_discharged_per_secondary > 12)) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if all conditions passed, charge message is true
+	manual_balancing_config.valid_charge_message = true;
+	charging_msg_timeout = 0;
 
-		  // if discharge is enabled AND if discharge cell threshold is out of bounds [3.2-4.2][V]
-		  // multiplied by 10,000 -> [32000 - 42000]
-		  if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.discharge_threshold_voltage < 32000) || (manual_balancing_config.discharge_threshold_voltage > 42000))) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
-
-		  // if all conditions passed, charge message is true
-		  manual_balancing_config.valid_charge_message = true;
-		  charging_counter++;
-		  break;
-
-	  default:
-		  break;
-  }
-
-}
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
-{
-    (void)hcan;
 }
 
 /* USER CODE END 4 */

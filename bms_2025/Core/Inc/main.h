@@ -41,9 +41,43 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-#define CRITICAL_INTR_SRCNO TIM1_UP_TIM10_IRQn
-#define START_CRITICAL_SECTION HAL_NVIC_DisableIRQ(CRITICAL_INTR_SRCNO)
-#define END_CRITICAL_SECTION HAL_NVIC_EnableIRQ(CRITICAL_INTR_SRCNO)
+#define ISOADC_TIMER_IRQ TIM1_UP_TIM10_IRQn
+#define CAN_TX_TIMER_IRQ TIM7_IRQn
+#define CAN1_RX_FIF0_IRQ CAN1_RX0_IRQn
+#define DISABLE_ALL_IRQS 						\
+	do{ 										\
+		HAL_NVIC_DisableIRQ(ISOADC_TIMER_IRQ);	\
+		HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ);  \
+		HAL_NVIC_DisableIRQ(CAN1_RX_FIF0_IRQ);  \
+	}while(0);
+
+#define ENABLE_ALL_IRQS 						\
+	do{ 										\
+		HAL_NVIC_EnableIRQ(ISOADC_TIMER_IRQ);	\
+		HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ);  \
+		HAL_NVIC_EnableIRQ(CAN1_RX_FIF0_IRQ);  \
+	}while(0);
+
+#define DISABLE_CAN_TX_TIMER_IRQ HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ)
+#define ENABLE_CAN_TX_TIMER_IRQ HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ)
+
+#define DISABLE_CAN1_RX_FIF0_IRQ HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ)
+#define ENABLE_CAN1_RX_FIF0_IRQ HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ)
+
+#define DISABLE_ALL_CAN_IRQS 						\
+		do{ 										\
+			HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ);  \
+			HAL_NVIC_DisableIRQ(CAN1_RX_FIF0_IRQ);  \
+		}while(0);
+
+#define ENABLE_ALL_CAN_IRQS 						\
+		do{ 										\
+			HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ);  	\
+			HAL_NVIC_EnableIRQ(CAN1_RX_FIF0_IRQ);  	\
+		}while(0);
+
+
+
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -61,6 +95,12 @@ extern SPI_HandleTypeDef* ltc_spi;
 extern uint16_t poll_cell_temps;
 extern uint16_t poll_cell_voltages;
 extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim7;
+extern TIM_HandleTypeDef htim13;
+
+void send_can_msg_from_irq();
+void send_cell_vals_polling();
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

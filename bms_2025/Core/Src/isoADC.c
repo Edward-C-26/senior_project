@@ -211,13 +211,13 @@ uint8_t read_isoADC_register(isoADCRegisterAddr_e address, uint8_t* response_buf
     // wake up chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI2_NSS low to turn chip on
 
-    START_CRITICAL_SECTION;
+    DISABLE_ALL_IRQS
     // send command through SPI and store into dataBuffer
     HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, initialBuffer, sizeof(cmd_word), SPI_WAIT_TIME);
 
     // send second command to get response
     HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
-    END_CRITICAL_SECTION;
+    ENABLE_ALL_IRQS
 
     // sleep chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET); // pull SPI2_NSS low to turn chip on
@@ -256,13 +256,13 @@ uint8_t write_isoADC_register(isoADCRegisterAddr_e address, uint8_t* response_bu
 
     // wake up chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI3_NSS low to turn chip on
-    START_CRITICAL_SECTION;
+    DISABLE_ALL_IRQS
     // send command through SPI and store into dataBuffer
     HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, dummy_buffer, sizeof(cmd_word), SPI_WAIT_TIME);
 
     // send second command to get response
     HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
-    END_CRITICAL_SECTION;
+    ENABLE_ALL_IRQS
     // sleep chip
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET); // pull SPI3_NSS low to turn chip on
 
@@ -309,16 +309,16 @@ uint8_t read_isoADC_ADCs(isoADCConfig_t const* cfg_ptr, isoADCData_t* data_ptr) 
 
 	// wake up chip
 	HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET); // pull SPI2_NSS low to turn chip on
-	START_CRITICAL_SECTION;
+	DISABLE_ALL_IRQS
 	// send command through SPI and store into initialBuffer
 	HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
-	END_CRITICAL_SECTION;
+	ENABLE_ALL_IRQS
 	// this while loop should only occur on startup to manage how DRDY bits are cleared
 	while (((response_buffer[1] & 0x01) != 0x01) || ((response_buffer[1] & 0x02) != 0x02) || ((response_buffer[1] & 0x04) != 0x04)) {
 		abort_counter++;
-		START_CRITICAL_SECTION;
+		DISABLE_ALL_IRQS
 		status1 |= HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), SPI_WAIT_TIME);
-		END_CRITICAL_SECTION;
+		ENABLE_ALL_IRQS
 		// each abort_counter increment is a failed ADC read (data is not ready)
 		if (abort_counter > 100) {
 			data_ptr->abort_fault = true;
@@ -429,10 +429,10 @@ uint8_t write_isoADC_reg_with_crc(isoADCRegisterAddr_e address, uint8_t* respons
 
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET);
 
-    START_CRITICAL_SECTION;
+    DISABLE_ALL_IRQS
     HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, dummy_buffer, sizeof(cmd_word), 1000);
     HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, dummy_buffer, sizeof(null_word), 1000);
-    END_CRITICAL_SECTION;
+    ENABLE_ALL_IRQS
 
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET);
 
@@ -455,12 +455,12 @@ uint8_t read_isoADC_reg_with_crc(isoADCRegisterAddr_e address, uint8_t* response
     cmd_word[2] = 0x00;
 
     uint8_t null_word[XMISSION_SIZE] = {0x00, 0x00, 0x00};  
-    START_CRITICAL_SECTION;
+    DISABLE_ALL_IRQS
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_RESET);
     HAL_StatusTypeDef status1 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, cmd_word, dummy_buffer, sizeof(cmd_word), 1000);
     HAL_StatusTypeDef status2 = HAL_SPI_TransmitReceive(isoADC_SPI_ptr_g, null_word, response_buffer, sizeof(null_word), 1000);
     HAL_GPIO_WritePin(isoADC_SPI_cs_port_ptr_g, isoADC_SPI_cs_pin_g, GPIO_PIN_SET);
-    END_CRITICAL_SECTION;
+    ENABLE_ALL_IRQS
 
     if (status1 == HAL_OK && status2 == HAL_OK) {
         uint8_t received_crc_high = response_buffer[5];
