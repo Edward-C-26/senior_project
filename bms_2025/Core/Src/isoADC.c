@@ -442,6 +442,10 @@ uint8_t write_isoADC_reg_with_crc(isoADCRegisterAddr_e address, uint8_t* respons
 bool convert_raw_to_actual(isoADCConfig_t *config, isoADCData_t *data_ptr) {
     // Pack voltage
     data_ptr->bus_voltage = data_ptr->raw_scaled_bus_voltage * (config->vbus_resistance + config->vbus_sense_resistance) / config->vbus_sense_resistance;
+
+    // Pack Current
+    data_ptr->shunt_current = data_ptr->raw_shunt_voltage / config->shunt_resistance;
+
     return 1;
 }
 

@@ -195,6 +195,7 @@ typedef struct {
 
 	// processed data
     float bus_voltage;
+    float shunt_current;
 	float shunt_temp;					// calculated shunt resistor temperature
 	float adjusted_shunt_voltage;		// adjusted based on shunt resistor temperature
 

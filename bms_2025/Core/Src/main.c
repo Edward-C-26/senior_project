@@ -113,8 +113,8 @@ uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
 uint8_t charging_msg_timeout = 1;
 
-uint16_t poll_cell_temps = 0;
-uint16_t poll_cell_voltages = 0;
+int16_t poll_cell_temps = 0;
+int16_t poll_cell_voltages = 0;
 
 bool CHARGE_EN = 0;
 
@@ -143,6 +143,8 @@ volatile uint8_t balancing_data_array[8];
 uint32_t prevTime = 0, timeBetween = 0;
 uint8_t error_cnt = 0;
 
+float live_pack_voltage = 0, live_pack_current = 0;
+bool live_precharge = false;
 
 
 /* USER CODE END PV */
@@ -254,8 +256,8 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-    	if(poll_cell_voltages >= 1000){
-    		poll_cell_voltages = 0;
+    	if(poll_cell_voltages <= 0){
+    		poll_cell_voltages = 1000;
 
     		volt_start_time = HAL_GetTick();
 //              writeConfigAll(&BMSConfig);
@@ -264,19 +266,19 @@ int main(void)
 //    		START_CRITICAL_SECTION;
     		poll_single_secondary_voltage_reading((uint8_t) i, &BMSConfig, bmsData);
 //            END_CRITICAL_SECTION;
-    	}
-        cell_volt_timing = HAL_GetTick() - volt_start_time;
+			}
+			cell_volt_timing = HAL_GetTick() - volt_start_time;
 
-        setCriticalVoltages(&BMSCriticalInfo, bmsData);
+			setCriticalVoltages(&BMSCriticalInfo, bmsData);
 
     	}
 
 
         // Read all Temps from LTC6811, store them in 144x6 array,
         // set the critical info struct, then send temp info over CAN
-       if(poll_cell_temps >= 2500){
+       if(poll_cell_temps <= 0){
 
-           poll_cell_temps = 0;
+           poll_cell_temps = 2500;
 
 		temp_start_time = HAL_GetTick();
 //                writeConfigAll(&BMSConfig);
@@ -285,15 +287,16 @@ int main(void)
 //			START_CRITICAL_SECTION;
 			poll_single_secondary_temp_reading((uint8_t) i, &BMSConfig, bmsData);
 //			END_CRITICAL_SECTION;
+			}
+			cell_temp_timing = HAL_GetTick() - temp_start_time;
+
+			setCriticalTemps(&BMSCriticalInfo, bmsData);
 		}
-        cell_temp_timing = HAL_GetTick() - temp_start_time;
 
-        setCriticalTemps(&BMSCriticalInfo, bmsData);
-    }
 
-        BMSConfig.UV_threshold = (CHARGE_EN == 0) 
-            ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
-
+       // Check Precharge Complete Pin
+       manual_balancing_config.precharge_cplt = !(HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin));
+       live_precharge = manual_balancing_config.precharge_cplt;
 
         /* DO THIS WHEN TESTING BMS FAULTS*/    
         //*NOTE* : need to figure out which pin is the BMS fault pin
@@ -305,25 +308,32 @@ int main(void)
          }
          else {
          	global_error_count++;
-         	if (global_error_count == 5) {
+         	if (global_error_count == 10) {
          		global_error_count = 0;
          		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
                         GPIO_PIN_SET);
              }
          }
 
-        BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
+        BMSCriticalInfo.isoAdcPackVoltage = (float)gIsoADCData.bus_voltage;
+        BMSCriticalInfo.packCurrent = (float)gIsoADCData.shunt_current;
 
     	DISABLE_CAN1_RX_FIF0_IRQ;
-        if(new_balance_msg){
+        if(new_balance_msg == true){
         	process_balancing_msg();
         	new_balance_msg = 0;
         }
     	ENABLE_CAN1_RX_FIF0_IRQ;
 
-    	// Discharge cells if charge message is valid AND discharge is enabled AND there is no BMS fault
+    	/* Discharge cells if:
+    	 * charge message is valid
+    	 * AND discharge is enabled
+    	 * AND precharge is complete (contactors are closed)
+    	 * AND there is no BMS fault
+    	 */
         if((manual_balancing_config.valid_charge_message == true) &&
 			(manual_balancing_config.discharge_balance_en == true) &&
+			(manual_balancing_config.precharge_cplt == true) &&
 			(bmsFault == false)) {
 
             thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, manual_balancing_config.discharge_threshold_voltage, manual_balancing_config.num_cells_discharged_per_secondary);
@@ -957,7 +967,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		isoADC_rdy_status = read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
 		error_cnt += (uint8_t) (gIsoADCData.ch0_drdy ? 0 : 1);
 		convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
-		BMSCriticalInfo.packVoltage = (uint16_t)gIsoADCData.bus_voltage;
+		BMSCriticalInfo.isoAdcPackVoltage = (float)gIsoADCData.bus_voltage;
+		BMSCriticalInfo.packCurrent = (float)gIsoADCData.shunt_current;
+		live_pack_voltage = BMSCriticalInfo.isoAdcPackVoltage;
+		live_pack_current = BMSCriticalInfo.packCurrent;
 		transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
 		HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
 
@@ -1057,9 +1070,9 @@ static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t cons
 
     uint8_t data[CAN_1_BMS_STATUS_LENGTH];
     struct can_1_bms_status status_msg = {
-        .soc_accum = 0.0F, // TODO
-        .cur_accum = 0.0F,
-        .vlt_accum = (float)bms->packVoltage / 10.0F,
+        .soc_accum = 0.0F,
+        .cur_accum = (float)bms->packCurrent,
+        .vlt_accum = (float)bms->isoAdcPackVoltage,
 
         // TODO: refactor tf out of this lol
         .bms_fault_ovp = bmsStatus[0] & 0x01,
@@ -1137,7 +1150,9 @@ void CHARGER_message() {
 
 	uint8_t CHARGER_DATA[8];
 
-	if (manual_balancing_config.charge_en == true && manual_balancing_config.valid_charge_message == true) {
+	if ((manual_balancing_config.charge_en == true) &&
+		(manual_balancing_config.valid_charge_message == true) &&
+		(manual_balancing_config.precharge_cplt == true)) {
 		CHARGER_DATA[0] = (uint8_t)((manual_balancing_config.charge_voltage >> 8) & 0xFF);
 		CHARGER_DATA[1] = (uint8_t)(manual_balancing_config.charge_voltage & 0xFF);
 		CHARGER_DATA[2] = (uint8_t)((manual_balancing_config.charge_current >> 8) & 0xFF);

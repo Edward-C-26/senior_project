@@ -92,8 +92,8 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 extern SPI_HandleTypeDef* ltc_spi;
-extern uint16_t poll_cell_temps;
-extern uint16_t poll_cell_voltages;
+extern int16_t poll_cell_temps;
+extern int16_t poll_cell_voltages;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim13;
@@ -173,6 +173,8 @@ typedef struct {
 	bool discharge_balance_en;	// defaults to false
 	uint8_t num_cells_discharged_per_secondary;	// defaults to 0, must be set between 1 to 12 when discharge_balance_en == true
 	uint16_t discharge_threshold_voltage;	// defaults to 4.16V | multiplied by 10,000 | 4.16V -> 41600 in the variable
+
+	bool precharge_cplt;		// defaults to false
 
 	bool valid_charge_message;
 

@@ -57,7 +57,7 @@ void setCriticalVoltages(BMS_critical_info_t *bms,
             bms->invalid_data_cell = cell;
 		}        
     }
-	bms->packVoltage = totalVoltage;
+	bms->cellMonitorPackVoltage = totalVoltage;
 }
 
 
