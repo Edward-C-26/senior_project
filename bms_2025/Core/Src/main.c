@@ -881,11 +881,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PRECHARGE_COMPLETE_Pin CHARGE_EN_Pin */
-  GPIO_InitStruct.Pin = PRECHARGE_COMPLETE_Pin|CHARGE_EN_Pin;
+  /*Configure GPIO pin : PRECHARGE_COMPLETE_Pin */
+  GPIO_InitStruct.Pin = PRECHARGE_COMPLETE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(PRECHARGE_COMPLETE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DEBUG_LED_Pin */
   GPIO_InitStruct.Pin = DEBUG_LED_Pin;
@@ -907,6 +907,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SPI_ADC_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : CHARGE_EN_Pin */
+  GPIO_InitStruct.Pin = CHARGE_EN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(CHARGE_EN_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -1062,7 +1068,7 @@ static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t cons
         .bms_fault_utp = bmsStatus[0] & 0x08,
 
         // TODO: do we really not read this anywhere else in code? also active high/low?
-        .precharge_cplt = HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin)
+        .precharge_cplt = !(HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin))
     };
 
     can_1_bms_status_pack(data, &status_msg, sizeof(data));
