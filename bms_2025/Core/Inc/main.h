@@ -76,8 +76,6 @@ extern "C" {
 			HAL_NVIC_EnableIRQ(CAN1_RX_FIF0_IRQ);  	\
 		}while(0);
 
-
-
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -97,6 +95,7 @@ extern int16_t poll_cell_voltages;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim13;
+extern int32_t fault_timer;
 
 void send_can_msg_from_irq();
 void send_cell_vals_polling();

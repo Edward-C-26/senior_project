@@ -47,9 +47,9 @@ isoADCConfig_t gIsoADCConfig = {
 	 * - ch0_gain_enum	- PGA gain selection for channel 0
 	 */
 	// Driving car configuration is commented below
-    //	cfg_ptr->ch2_gain_enum = GAIN_1;
-    //	cfg_ptr->ch1_gain_enum = GAIN_1;
-    //	cfg_ptr->ch0_gain_enum = GAIN_128;
+//    .ch2_gain_enum = GAIN_1;
+//    .ch1_gain_enum = GAIN_1;
+//    .ch0_gain_enum = GAIN_128;
 
 	// Debugging configuration
 	.ch2_gain_enum = GAIN_1,
@@ -78,6 +78,7 @@ isoADCConfig_t gIsoADCConfig = {
     .shunt_resistance		= 0.00005f,
 
 	// set top half of HV sense resistor divider (4M ohms)
+	// 2025 Accumulator measured 3.989M ohms
 	.vbus_resistance 		= 4000000.0f,
 
 	// set bottom half of HV sense resistor divider (1k ohms)

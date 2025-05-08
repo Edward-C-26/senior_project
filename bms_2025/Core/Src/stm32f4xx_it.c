@@ -192,6 +192,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
   poll_cell_voltages--;
   poll_cell_temps--;
+  fault_timer--;
 
   /* USER CODE END SysTick_IRQn 1 */
 }
