@@ -1077,6 +1077,7 @@ static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t cons
         .soc_accum = 0.0F,
         .cur_accum = (float)bms->packCurrent,
         .vlt_accum = (float)bms->isoAdcPackVoltage,
+		.vlt_accum_6811 = (float)bms->cellMonitorPackVoltage / 10.0F,
 
         // TODO: refactor tf out of this lol
         .bms_fault_ovp = bmsStatus[0] & 0x01,
