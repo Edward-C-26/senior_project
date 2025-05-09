@@ -141,7 +141,7 @@ volatile uint8_t balancing_data_array[8];
 
 
 uint32_t prevTime = 0, timeBetween = 0;
-int32_t fault_timer = 5000;
+int32_t fault_timer = 2000;
 uint8_t error_cnt = 0;
 
 float live_pack_voltage = 0, live_pack_current = 0;
@@ -304,7 +304,7 @@ int main(void)
         bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
          if (bmsFault == false) {
         	 global_error_count = 0;
-        	 fault_timer = 5000;
+        	 fault_timer = 2000;
         	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
                      GPIO_PIN_RESET);
          }
