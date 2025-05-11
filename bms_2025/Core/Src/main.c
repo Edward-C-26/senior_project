@@ -142,7 +142,7 @@ volatile uint8_t balancing_data_array[8];
 
 uint32_t prevTime = 0, timeBetween = 0;
 int32_t fault_timer = 2000;
-uint8_t error_cnt = 0;
+uint8_t error_cnt = 0, error_voltage_read_count = 0, error_temp_read_count = 0;
 
 float live_pack_voltage = 0, live_pack_current = 0;
 bool live_precharge = false;
@@ -271,6 +271,9 @@ int main(void)
 			cell_volt_timing = HAL_GetTick() - volt_start_time;
 
 			setCriticalVoltages(&BMSCriticalInfo, bmsData);
+			if(bmsFault){
+				error_voltage_read_count++;
+			}
 
     	}
 
@@ -292,6 +295,9 @@ int main(void)
 			cell_temp_timing = HAL_GetTick() - temp_start_time;
 
 			setCriticalTemps(&BMSCriticalInfo, bmsData);
+			if(bmsFault){
+				error_temp_read_count++;
+			}
 		}
 
 
@@ -305,20 +311,18 @@ int main(void)
          if (bmsFault == false) {
         	 global_error_count = 0;
         	 fault_timer = 2000;
+        	 error_temp_read_count = 0;
+        	 error_voltage_read_count = 0;
         	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
                      GPIO_PIN_RESET);
          }
          else {
          	global_error_count++;
-//         	if (global_error_count == 10) {
-//         		global_error_count = 0;
-//         		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
-//                        GPIO_PIN_SET);
-//             }
-         	if(fault_timer <= 0){
+         	if(error_temp_read_count >= 2 || error_voltage_read_count >= 2){
          		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
          		                        GPIO_PIN_SET);
-         		fault_timer = 0;
+         		error_temp_read_count = 2;
+         		error_voltage_read_count = 2;
          	}
          }
 
