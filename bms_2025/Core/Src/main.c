@@ -257,21 +257,27 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-    	if(poll_cell_voltages <= 0){
+    	if (poll_cell_voltages <= 0){
     		poll_cell_voltages = 1000;
-
     		volt_start_time = HAL_GetTick();
-//              writeConfigAll(&BMSConfig);
-//        readAllCellVoltages(bmsData);
-    	for(int i = 0; i < NUM_BOARDS; i++){
-//    		START_CRITICAL_SECTION;
-    		poll_single_secondary_voltage_reading((uint8_t) i, &BMSConfig, bmsData);
-//            END_CRITICAL_SECTION;
+
+    		for (int i = 0; i < NUM_BOARDS; i++){
+				poll_single_secondary_voltage_reading((uint8_t) i, &BMSConfig, bmsData);
 			}
 			cell_volt_timing = HAL_GetTick() - volt_start_time;
 
 			setCriticalVoltages(&BMSCriticalInfo, bmsData);
-			if(bmsFault){
+
+			DISABLE_ALL_CAN_IRQS
+			bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+			ENABLE_ALL_CAN_IRQS
+
+			// check voltage faults
+			bool overvoltage_fault	= ((BMS_STATUS[0] & 0x01) == 0x01);
+			bool undervoltage_fault = ((BMS_STATUS[0] & 0x02) == 0x02);
+
+
+			if((overvoltage_fault == true) || (undervoltage_fault == true)){
 				error_voltage_read_count++;
 			}
 
@@ -280,22 +286,26 @@ int main(void)
 
         // Read all Temps from LTC6811, store them in 144x6 array,
         // set the critical info struct, then send temp info over CAN
-       if(poll_cell_temps <= 0){
+    	if (poll_cell_temps <= 0){
+    		poll_cell_temps = 2500;
+    		temp_start_time = HAL_GetTick();
 
-           poll_cell_temps = 2500;
-
-		temp_start_time = HAL_GetTick();
-//                writeConfigAll(&BMSConfig);
-//        readAllCellTemps(bmsData);
-    	for(int i = 0; i < NUM_BOARDS; i++){
-//			START_CRITICAL_SECTION;
-			poll_single_secondary_temp_reading((uint8_t) i, &BMSConfig, bmsData);
-//			END_CRITICAL_SECTION;
-			}
+    	for (int i = 0; i < NUM_BOARDS; i++){
+    		poll_single_secondary_temp_reading((uint8_t) i, &BMSConfig, bmsData);
+    	}
 			cell_temp_timing = HAL_GetTick() - temp_start_time;
-
 			setCriticalTemps(&BMSCriticalInfo, bmsData);
-			if(bmsFault){
+
+			DISABLE_ALL_CAN_IRQS
+			bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+			ENABLE_ALL_CAN_IRQS
+
+			// check temperature faults
+			bool overtemp_fault		= ((BMS_STATUS[0] & 0x04) == 0x04);
+			bool undertemp_fault	= ((BMS_STATUS[0] & 0x08) == 0x08);
+
+
+			if((overtemp_fault == true) || (undertemp_fault == true)){
 				error_temp_read_count++;
 			}
 		}
@@ -304,31 +314,30 @@ int main(void)
        // Check Precharge Complete Pin
        manual_balancing_config.precharge_cplt = !(HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin));
        live_precharge = manual_balancing_config.precharge_cplt;
+       DISABLE_ALL_CAN_IRQS
 
-        /* DO THIS WHEN TESTING BMS FAULTS*/    
-        //*NOTE* : need to figure out which pin is the BMS fault pin
-        bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
-         if (bmsFault == false) {
-        	 global_error_count = 0;
-        	 fault_timer = 2000;
-        	 error_temp_read_count = 0;
-        	 error_voltage_read_count = 0;
-        	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
-                     GPIO_PIN_RESET);
-         }
-         else {
-         	global_error_count++;
-         	if(error_temp_read_count >= 2 || error_voltage_read_count >= 2){
-         		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
-         		                        GPIO_PIN_SET);
-         		error_temp_read_count = 2;
-         		error_voltage_read_count = 2;
-         	}
-         }
+	   /* DO THIS WHEN TESTING BMS FAULTS*/
+	   //*NOTE* : need to figure out which pin is the BMS fault pin
+	   bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+       if (bmsFault == false) {
+    	   global_error_count = 0;
+    	   fault_timer = 2000;
+    	   error_temp_read_count = 0;
+    	   error_voltage_read_count = 0;
+    	   HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_RESET);
+       }
+       else {
+    	   global_error_count++;
+    	   if ((error_temp_read_count >= 2) || (error_voltage_read_count >= 2)){
+    		   HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_SET);
+    		   error_temp_read_count = 2;
+    		   error_voltage_read_count = 2;
+    	   }
+       }
 
         BMSCriticalInfo.isoAdcPackVoltage = (float)gIsoADCData.bus_voltage;
         BMSCriticalInfo.packCurrent = (float)gIsoADCData.shunt_current;
-
+        ENABLE_ALL_CAN_IRQS
     	DISABLE_CAN1_RX_FIF0_IRQ;
         if(new_balance_msg == true){
         	process_balancing_msg();
@@ -358,14 +367,6 @@ int main(void)
         else {
         	thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, 43000, 0);	// default to an "off" state, cells should never go this high
         }
-
-        // send CAN messages to charger
-        // if charge message from laptop is valid AND charge is enabled AND there is no BMS fault
-//        if ((manual_balancing_config.valid_charge_message == true) &&
-//			(manual_balancing_config.charge_en == true) &&
-//			(!bmsFault == true)) {
-//        	CHARGER_message();
-//        }
 
         // stop messages from being sent if no message has been sent in 2 seconds
         if (charging_msg_timeout == 1) {

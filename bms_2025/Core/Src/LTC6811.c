@@ -436,27 +436,19 @@ bool poll_single_secondary_voltage_reading(uint8_t board_num, BMSConfigStructTyp
 	uint16_t boardVoltage[12];
 	bool PEC_check[12]	;
 	bool dataValid = true;
-	//Do write config all
-
 
 	wakeup_idle();
-//	START_CRITICAL_SECTION;
-	writeConfigAddress(cfg, cfg->address[board_num]); // do we need to do this every time?
-	// do readAllCellVoltages
-//	wakeup_idle();
-//	HAL_Delay(2);
+	writeConfigAddress(cfg, cfg->address[board_num]);
 
 	sendBroadcastCommand(ClearRegisters);
 	sendBroadcastCommand(StartCellVoltageADCConversionAll);
-//	END_CRITICAL_SECTION;
+
 	HAL_Delay(3);
 	wakeup_idle();
 	HAL_Delay(1);
 
-//	START_CRITICAL_SECTION;
 	// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
 	PEC_check[board_num] = readCellVoltage(board_num, boardVoltage);
-//	END_CRITICAL_SECTION;
 
 	dataValid &= PEC_check[board_num];
 
@@ -488,14 +480,10 @@ bool poll_single_secondary_temp_reading(uint8_t board_num, BMSConfigStructTypede
 	//Do write config all
 	wakeup_idle();
 
-//	START_CRITICAL_SECTION;
-	writeConfigAddress(cfg, cfg->address[board_num]); // do we need to do this every time?
-	// do readAllCellTemps(bmsData);
-//	wakeup_idle();
-//	HAL_Delay(2);
+	writeConfigAddress(cfg, cfg->address[board_num]);
+
 	sendBroadcastCommand(ClearRegisters);
 	sendBroadcastCommand(StartCellTempVoltageADCConversionAll);
-//	END_CRITICAL_SECTION;
 
 	HAL_Delay(3);
 
@@ -503,10 +491,8 @@ bool poll_single_secondary_temp_reading(uint8_t board_num, BMSConfigStructTypede
 	wakeup_idle();
 	HAL_Delay(1);
 
-//	START_CRITICAL_SECTION;
 	// read temperature, check for OT and temp DC
 	PEC_check[board_num] = readCellTemp(board_num, boardTemp, boardDCFault, boardTempFault);
-//	END_CRITICAL_SECTION;
 
 	dataValid &= PEC_check[board_num];
 
