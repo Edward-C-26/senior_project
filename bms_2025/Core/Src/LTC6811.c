@@ -68,17 +68,17 @@ uint16_t calculatePEC(uint8_t len, uint8_t *data) {	 // changed to take data by 
 //! @param address is the address used to pass into our config file 
 //! @returns none 
 void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
-	uint8_t config[6];
+//	uint8_t config[6];
 	uint8_t cmd[12];
 	uint16_t PEC_return;
 	uint8_t dummy[8];
 
-	config[0] = (uint8_t)((cfg->GPIO5PulldownOff << 7) | (cfg->GPIO4PulldownOff << 6) | (cfg->GPIO3PulldownOff << 5) | (cfg->GPIO2PulldownOff << 4) | (cfg->GPIO1PulldownOff << 3) | (cfg->ReferenceOn << 2) | (cfg->ADCModeOption));
-	config[1] = (uint8_t)(cfg->UndervoltageComparisonVoltage & 0xFF);
-	config[2] = (uint8_t)(((cfg->OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg->UndervoltageComparisonVoltage >> 8) & 0x0F));
-	config[3] = (uint8_t)((cfg->OvervoltageComparisonVoltage >> 4) & 0xFF);
-	config[4] = (uint8_t)((cfg->DischargeCell[7] << 7) | (cfg->DischargeCell[6] << 6) | (cfg->DischargeCell[5] << 5) | (cfg->DischargeCell[4] << 4) | (cfg->DischargeCell[3] << 3) | (cfg->DischargeCell[2] << 2) | (cfg->DischargeCell[1] << 1) | (cfg->DischargeCell[0]));
-	config[5] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[11] << 3) | (cfg->DischargeCell[10] << 2) | (cfg->DischargeCell[9] << 1) | (cfg->DischargeCell[8]));
+//	config[0] = (uint8_t)((cfg->GPIO5PulldownOff << 7) | (cfg->GPIO4PulldownOff << 6) | (cfg->GPIO3PulldownOff << 5) | (cfg->GPIO2PulldownOff << 4) | (cfg->GPIO1PulldownOff << 3) | (cfg->ReferenceOn << 2) | (cfg->ADCModeOption));
+//	config[1] = (uint8_t)(cfg->UndervoltageComparisonVoltage & 0xFF);
+//	config[2] = (uint8_t)(((cfg->OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg->UndervoltageComparisonVoltage >> 8) & 0x0F));
+//	config[3] = (uint8_t)((cfg->OvervoltageComparisonVoltage >> 4) & 0xFF);
+//	config[4] = (uint8_t)((cfg->DischargeCell[7] << 7) | (cfg->DischargeCell[6] << 6) | (cfg->DischargeCell[5] << 5) | (cfg->DischargeCell[4] << 4) | (cfg->DischargeCell[3] << 3) | (cfg->DischargeCell[2] << 2) | (cfg->DischargeCell[1] << 1) | (cfg->DischargeCell[0]));
+//	config[5] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[11] << 3) | (cfg->DischargeCell[10] << 2) | (cfg->DischargeCell[9] << 1) | (cfg->DischargeCell[8]));
 
 	cmd[0] = (uint8_t)((0x80 | ((address << 3) & 0x78) | ((WriteConfigurationRegisterGroup >> 8) & 0x07)));
 	cmd[1] = (uint8_t)(WriteConfigurationRegisterGroup & 0xFF);
@@ -88,7 +88,14 @@ void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	cmd[2] = (uint8_t)((PEC_return >> 8) & 0xFF);
 	cmd[3] = (uint8_t)(PEC_return & 0xFF);
 
-	memcpy(&cmd[4], config, 6 * sizeof(config[0]));
+//	memcpy(&cmd[4], config, 6 * sizeof(config[0]));
+
+	cmd[4] = (uint8_t)((cfg->GPIO5PulldownOff << 7) | (cfg->GPIO4PulldownOff << 6) | (cfg->GPIO3PulldownOff << 5) | (cfg->GPIO2PulldownOff << 4) | (cfg->GPIO1PulldownOff << 3) | (cfg->ReferenceOn << 2) | (cfg->ADCModeOption));
+	cmd[5] = (uint8_t)(cfg->UndervoltageComparisonVoltage & 0xFF);
+	cmd[6] = (uint8_t)(((cfg->OvervoltageComparisonVoltage << 4) & 0xF0) | ((cfg->UndervoltageComparisonVoltage >> 8) & 0x0F));
+	cmd[7] = (uint8_t)((cfg->OvervoltageComparisonVoltage >> 4) & 0xFF);
+	cmd[8] = (uint8_t)((cfg->DischargeCell[7] << 7) | (cfg->DischargeCell[6] << 6) | (cfg->DischargeCell[5] << 5) | (cfg->DischargeCell[4] << 4) | (cfg->DischargeCell[3] << 3) | (cfg->DischargeCell[2] << 2) | (cfg->DischargeCell[1] << 1) | (cfg->DischargeCell[0]));
+	cmd[9] = (uint8_t)(((cfg->DischargeTimeoutValue << 4) & 0xF0) | (cfg->DischargeCell[11] << 3) | (cfg->DischargeCell[10] << 2) | (cfg->DischargeCell[9] << 1) | (cfg->DischargeCell[8]));
 
 	PEC_return = calculatePEC(6, cmd + 4);
 
@@ -98,6 +105,7 @@ void writeConfigAddress(BMSConfigStructTypedef *cfg, uint8_t address) {
 	SPIWrite(cmd, sizeof(cmd));
 
 	readConfig(address, dummy);
+
 }
 
 //! @brief This function is called every loop to accommodate dischargeCells method 
@@ -416,12 +424,103 @@ bool dischargeCellGroups(BMSConfigStructTypedef *cfg, bool cellDischarge[12][12]
 }
 
 //! @brief This function is used to wakeup the LTC chip that we want to use to get readings from 
-void wakeup_idle() {
+void inline wakeup_idle() {
 	uint32_t delay = 1;
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 	while (delay--)
 		;
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+}
+
+bool poll_single_secondary_voltage_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
+	uint16_t boardVoltage[12];
+	bool PEC_check[12]	;
+	bool dataValid = true;
+
+	wakeup_idle();
+	writeConfigAddress(cfg, cfg->address[board_num]);
+
+	sendBroadcastCommand(ClearRegisters);
+	sendBroadcastCommand(StartCellVoltageADCConversionAll);
+
+	HAL_Delay(3);
+	wakeup_idle();
+	HAL_Delay(1);
+
+	// read voltage of every cell input (1-12) for a specific address, store in boardVoltage
+	PEC_check[board_num] = readCellVoltage(board_num, boardVoltage);
+
+	dataValid &= PEC_check[board_num];
+
+	// store cell number and valid data bit in bmsData
+	for (uint8_t cell = 0; cell < NUM_BOARDS; cell++) {
+		bmsData[(board_num * NUM_BOARDS) + cell].voltage = (uint8_t)((board_num * NUM_BOARDS) + cell + 1);  // cell number
+
+		if (!PEC_check[board_num]) {
+			bmsData[(board_num * NUM_BOARDS) + cell].fault |= CELL_PEC_FAIL_MASK;
+		} else {
+			bmsData[(board_num * NUM_BOARDS) + cell].fault &= (uint8_t)(~CELL_PEC_FAIL_MASK);
+		}
+
+		bmsData[(board_num * NUM_BOARDS) + cell].voltage = boardVoltage[cell];
+	}
+
+	return dataValid;
+
+}
+
+bool poll_single_secondary_temp_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
+
+	// do writeConfigAll(&BMSConfig);
+	uint16_t boardTemp[4];
+	bool boardDCFault[4];
+	bool boardTempFault[4];
+	bool PEC_check[12];
+	bool dataValid = true;
+	//Do write config all
+	wakeup_idle();
+
+	writeConfigAddress(cfg, cfg->address[board_num]);
+
+	sendBroadcastCommand(ClearRegisters);
+	sendBroadcastCommand(StartCellTempVoltageADCConversionAll);
+
+	HAL_Delay(3);
+
+
+	wakeup_idle();
+	HAL_Delay(1);
+
+	// read temperature, check for OT and temp DC
+	PEC_check[board_num] = readCellTemp(board_num, boardTemp, boardDCFault, boardTempFault);
+
+	dataValid &= PEC_check[board_num];
+
+	// store OT and temp DC bits in status byte
+	for (uint8_t cell = 0; cell < 12; cell++) {
+		if (!PEC_check[board_num]) {
+			bmsData[(board_num * 12) + cell].fault |= CELL_PEC_FAIL_MASK;
+		} else {
+			bmsData[(board_num * 12) + cell].fault &= (uint8_t)(~CELL_PEC_FAIL_MASK);
+		}
+
+		if (boardTempFault[cell / 3]) {
+			bmsData[(board_num * 12) + cell].fault |= CELL_TEMP_FAIL_MASK;
+		} else {
+			bmsData[(board_num * 12) + cell].fault &= (uint8_t)(~CELL_TEMP_FAIL_MASK);	// set OT bit
+		}
+
+		if (boardDCFault[cell / 3]) {
+			bmsData[(board_num * 12) + cell].fault |= CELL_DCFAULT_MASK;
+		} else {
+			bmsData[(board_num * 12) + cell].fault &= (uint8_t)(~CELL_DCFAULT_MASK);
+		}
+
+		bmsData[(board_num * 12) + cell].temperature = boardTemp[cell / 3];
+	}
+
+	return dataValid;
+
 }
 
 //! @brief Reads register specified by command from specified board address 

@@ -33,6 +33,7 @@
 #include "LTC6811.h"
 #include "PackCalculations.h"
 #include "SPI.h"
+#include "isoADC.h"
 
 #include "can_1.h"
 #include "can_2.h"
@@ -56,7 +57,7 @@
 #define CONSTANT_CAN_ENABLE 0
 
 #define BMS_RX_MSG_ID 0x0300
-#define BMS_RX_MSG_MASK 0x0E00
+#define BMS_RX_MSG_MASK 0x0F00
 
 
 #define BALANCE_EN  0
@@ -72,7 +73,7 @@
 // Assuming a 0% bus load 500kbit/s CAN bus, 5ms would be enough time to send ~23 8 byte CAN messages
 // If we hit the 5ms timeout without transmitting any pending messages, we're either at an extremely high bus load
 // and losing arbitration or there's some other issue (bus disconnected, no termination, etc.)
-#define CAN_TX_TIMEOUT 5
+#define CAN_TX_TIMEOUT 2
 
 
 /* USER CODE END PD */
@@ -90,16 +91,19 @@ SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim7;
+TIM_HandleTypeDef htim13;
 
 /* USER CODE BEGIN PV */
 SPI_HandleTypeDef *ltc_spi = &hspi1;
 
 CAN_TxHeaderTypeDef tx_header;
-CAN_RxHeaderTypeDef rx_header;
+volatile CAN_RxHeaderTypeDef rx_header;
 uint8_t tx_data[8];
-uint8_t rx_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+volatile uint8_t rx_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint32_t tx_mailbox;
 
 CAN_TxHeaderTypeDef charger_tx_header;
@@ -107,20 +111,42 @@ uint8_t charger_tx_data[8];
 uint8_t charge_rate = 2;
 uint8_t global_error_count = 0;
 uint8_t balance_counter = 0;
-uint8_t charging_counter = 0;
+uint8_t charging_msg_timeout = 1;
 
-bool bmsFault = 0;
+int16_t poll_cell_temps = 0;
+int16_t poll_cell_voltages = 0;
+
 bool CHARGE_EN = 0;
-
-uint16_t *buff_2949;
-bool ret_2949;
 
 CellData bmsData[144];
 uint8_t BMS_STATUS[6];
 bool discharge[12][12];
 bool full_discharge[12][12];
 
-manual_balancing_t manual_balancing_config;
+volatile manual_balancing_t manual_balancing_config;
+volatile bool bmsFault;
+
+SPI_HandleTypeDef* isoADC_SPI_ptr_g = &hspi2;
+GPIO_TypeDef* isoADC_SPI_cs_port_ptr_g = SPI_ADC_CS_GPIO_Port;
+uint16_t isoADC_SPI_cs_pin_g = GPIO_PIN_12;
+TIM_HandleTypeDef* isoADC_PWM_ptr_g = &htim3;
+uint32_t isoADC_PWM_ch_g = TIM_CHANNEL_1;
+BMS_critical_info_t BMSCriticalInfo;
+uint8_t isoADC_rdy_status = 0, isoADC_period_miss = 0, max_isoADC_period = 0;
+uint32_t cell_volt_timing = 0, cell_temp_timing = 0, volt_start_time = 0, temp_start_time = 0;
+
+volatile bool pollingFlag = false;
+volatile uint8_t new_balance_msg = 0, can_tx_phase = 0;
+volatile uint8_t balancing_data_array[8];
+
+
+uint32_t prevTime = 0, timeBetween = 0;
+int32_t fault_timer = 2000;
+uint8_t error_cnt = 0, error_voltage_read_count = 0, error_temp_read_count = 0;
+
+float live_pack_voltage = 0, live_pack_current = 0;
+bool live_precharge = false;
+
 
 /* USER CODE END PV */
 
@@ -134,8 +160,10 @@ static void MX_SPI3_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CAN2_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM7_Init(void);
+static void MX_TIM13_Init(void);
 /* USER CODE BEGIN PFP */
-static void setChargerTxData(BMSConfigStructTypedef cfg);
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]);
 static void transmit_cell_data_msg(CellData const bmsData[144]);
 static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t const bmsStatus[6]);
@@ -147,8 +175,7 @@ static void transmit_cell_temp_msg(BMS_critical_info_t const *bms);
 // Manual Charging/Balancing Functions
 void CHARGER_message();
 void resetChargerVariables();
-void getLaptopCanMessage();
-bool pollingFlag = false;
+void process_balancing_msg();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -174,7 +201,6 @@ int main(void)
 
   /* USER CODE BEGIN Init */
     BMSConfigStructTypedef BMSConfig;
-    BMS_critical_info_t BMSCriticalInfo;
 
   /* USER CODE END Init */
 
@@ -194,13 +220,25 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_CAN2_Init();
+  MX_TIM1_Init();
+  MX_TIM7_Init();
+  MX_TIM13_Init();
   /* USER CODE BEGIN 2 */
     initPECTable();
     loadConfig(&BMSConfig);
     init_BMS_info(&BMSCriticalInfo);
     resetChargerVariables();
 
-//    HAL_CAN_Start(&hcan1);
+    // wake up isoADC
+    HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+    isoADC_rdy_status = wakeup_isoADC(&gIsoADCConfig, &gIsoADCData);
+
+    // turn on timer interrupt for isoADC 128Hz
+    HAL_TIM_Base_Start_IT(&htim1);
+    // Sending CAN messages
+    HAL_TIM_Base_Start_IT(&htim7);
+    // Sending cell polling message
+    HAL_TIM_Base_Start_IT(&htim13);
 
   /* USER CODE END 2 */
 
@@ -212,8 +250,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-        writeConfigAll(&BMSConfig);
-
         /** FUNCTION CALL OVERVIEW
          * First: Call read6811 -> Voltages, Temps on 6811
          * Second: Check for Faults
@@ -221,84 +257,107 @@ int main(void)
          * Fourth : Remaining CAN messages
          * Last: :3 
          */
-        readAllCellVoltages(bmsData);
-        setCriticalVoltages(&BMSCriticalInfo, bmsData);
+    	if (poll_cell_voltages <= 0){
+    		poll_cell_voltages = 1000;
+    		volt_start_time = HAL_GetTick();
+
+    		for (int i = 0; i < NUM_BOARDS; i++){
+				poll_single_secondary_voltage_reading((uint8_t) i, &BMSConfig, bmsData);
+			}
+			cell_volt_timing = HAL_GetTick() - volt_start_time;
+
+			setCriticalVoltages(&BMSCriticalInfo, bmsData);
+
+			DISABLE_ALL_CAN_IRQS
+			bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+			ENABLE_ALL_CAN_IRQS
+
+			// check voltage faults
+			bool overvoltage_fault	= ((BMS_STATUS[0] & 0x01) == 0x01);
+			bool undervoltage_fault = ((BMS_STATUS[0] & 0x02) == 0x02);
+
+
+			if((overvoltage_fault == true) || (undervoltage_fault == true)){
+				error_voltage_read_count++;
+			}
+
+    	}
 
 
         // Read all Temps from LTC6811, store them in 144x6 array,
         // set the critical info struct, then send temp info over CAN
-        readAllCellTemps(bmsData);
+    	if (poll_cell_temps <= 0){
+    		poll_cell_temps = 2500;
+    		temp_start_time = HAL_GetTick();
 
-        setCriticalTemps(&BMSCriticalInfo, bmsData);
-
-        BMSConfig.UV_threshold = (CHARGE_EN == 0) 
-            ? BMSConfig.LUV_threshold : BMSConfig.HUV_threshold;
-
-
-        /* DO THIS WHEN TESTING BMS FAULTS*/    
-        //*NOTE* : need to figure out which pin is the BMS fault pin
-         bool bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
-         if (bmsFault == false) {
-        	 global_error_count = 0;
-        	 HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, 
-                     GPIO_PIN_RESET);
-         }
-         else {
-         	global_error_count++;
-         	if (global_error_count == 5) {
-         		global_error_count = 0;
-         		HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin,
-                        GPIO_PIN_SET);
-             }
-         }
-
-        // Finally, balance if charging and toggled 
-        // TODO: make no balance when bms fault
-        if(CHARGE_EN == 0 && BALANCE_EN == 1) {
-            if(charge_rate != 0) {
-                balance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge,
-                        full_discharge, balance_counter, &charge_rate);
-
-                if(balance_counter == 12) {
-                    balance_counter = 0;
-                }
-            }
-            setChargerTxData(BMSConfig);
-
-            if(charge_rate != 0) {
-                dischargeCellGroups(&BMSConfig, discharge);
-                HAL_Delay(BMSConfig.dischargeTime);
-            } else {
-                // checkDischarge(BMSConfig, full_discharge, bmsData);
-                // not anywhere in past code??? WTF
-                dischargeCellGroups(&BMSConfig, full_discharge);
-                HAL_Delay(BMSConfig.dischargeTime);
-            }
-        }
-
-        // poll for CAN1 Message from Laptop
-        if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
-        	getLaptopCanMessage();
-
-            int messagesDiscarded = 0;
-			// Clear the receive FIFO0 by reading and discarding all messages
-			while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0
-                    || messagesDiscarded < CAN_RX_MAILBOX_SIZE)
-			{
-				// Retrieve and discard the message
-				HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
-                messagesDiscarded++;
-			}
+    	for (int i = 0; i < NUM_BOARDS; i++){
+    		poll_single_secondary_temp_reading((uint8_t) i, &BMSConfig, bmsData);
     	}
+			cell_temp_timing = HAL_GetTick() - temp_start_time;
+			setCriticalTemps(&BMSCriticalInfo, bmsData);
 
-        // Discharge cells if charge message is valid AND discharge is enabled AND there is no BMS fault
+			DISABLE_ALL_CAN_IRQS
+			bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+			ENABLE_ALL_CAN_IRQS
+
+			// check temperature faults
+			bool overtemp_fault		= ((BMS_STATUS[0] & 0x04) == 0x04);
+			bool undertemp_fault	= ((BMS_STATUS[0] & 0x08) == 0x08);
+
+
+			if((overtemp_fault == true) || (undertemp_fault == true)){
+				error_temp_read_count++;
+			}
+		}
+
+
+       // Check Precharge Complete Pin
+       manual_balancing_config.precharge_cplt = !(HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin));
+       live_precharge = manual_balancing_config.precharge_cplt;
+       DISABLE_ALL_CAN_IRQS
+
+	   /* DO THIS WHEN TESTING BMS FAULTS*/
+	   //*NOTE* : need to figure out which pin is the BMS fault pin
+	   bmsFault = FAULT_check(&BMSCriticalInfo, BMS_STATUS);
+       if (bmsFault == false) {
+    	   global_error_count = 0;
+    	   fault_timer = 2000;
+    	   error_temp_read_count = 0;
+    	   error_voltage_read_count = 0;
+    	   HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_RESET);
+       }
+       else {
+    	   global_error_count++;
+    	   if ((error_temp_read_count >= 2) || (error_voltage_read_count >= 2)){
+    		   HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_SET);
+    		   error_temp_read_count = 2;
+    		   error_voltage_read_count = 2;
+    	   }
+       }
+
+        BMSCriticalInfo.isoAdcPackVoltage = (float)gIsoADCData.bus_voltage;
+        BMSCriticalInfo.packCurrent = (float)gIsoADCData.shunt_current;
+        ENABLE_ALL_CAN_IRQS
+    	DISABLE_CAN1_RX_FIF0_IRQ;
+        if(new_balance_msg == true){
+        	process_balancing_msg();
+        	new_balance_msg = 0;
+        }
+    	ENABLE_CAN1_RX_FIF0_IRQ;
+
+    	/* Discharge cells if:
+    	 * charge message is valid
+    	 * AND discharge is enabled
+    	 * AND precharge is complete (contactors are closed)
+    	 * AND there is no BMS fault
+    	 */
         if((manual_balancing_config.valid_charge_message == true) &&
 			(manual_balancing_config.discharge_balance_en == true) &&
+			(manual_balancing_config.precharge_cplt == true) &&
 			(bmsFault == false)) {
 
             thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, manual_balancing_config.discharge_threshold_voltage, manual_balancing_config.num_cells_discharged_per_secondary);
           
-//            setChargerTxData(BMSConfig); // this is unsed for now
             dischargeCellGroups(&BMSConfig, discharge);
             HAL_Delay(BMSConfig.dischargeTime);
 
@@ -309,31 +368,11 @@ int main(void)
         	thresholdBalance(&BMSConfig, &BMSCriticalInfo, bmsData, discharge, 43000, 0);	// default to an "off" state, cells should never go this high
         }
 
-        // send CAN messages to charger
-        // if charge message from laptop is valid AND charge is enabled AND there is no BMS fault
-        if ((manual_balancing_config.valid_charge_message == true) &&
-			(manual_balancing_config.charge_en == true) &&
-			(!bmsFault == true)) {
-        	CHARGER_message();
-        }
-
         // stop messages from being sent if no message has been sent in 2 seconds
-        if (charging_counter > 4) {
+        if (charging_msg_timeout == 1) {
         	resetChargerVariables();
         }
-        charging_counter++;
 
-        // Send remaining CAN messages
-        transmit_cell_vlt_msg(&BMSCriticalInfo);    
-        transmit_cell_temp_msg(&BMSCriticalInfo);
-        transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
-        // PACKSTAT_message(&BMSCriticalInfo);
-        // PACKSTAT_message(&BMSCriticalInfo);
-
-      if (pollingFlag || CONSTANT_CAN_ENABLE){
-        transmit_cell_data_msg(bmsData);
-        pollingFlag = false;
-      }
     }
 
 
@@ -438,10 +477,10 @@ static void MX_CAN1_Init(void)
   }
 
   // This ties the interupt to the rx_fifo0 msg bufer
-//  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-//   {
-//     Error_Handler();
-//   }
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+   {
+     Error_Handler();
+   }
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -542,7 +581,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.Direction = SPI_DIRECTION_2LINES;
   hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi2.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
   hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
@@ -594,6 +633,52 @@ static void MX_SPI3_Init(void)
   /* USER CODE BEGIN SPI3_Init 2 */
 
   /* USER CODE END SPI3_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 1;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 62499;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
 
 }
 
@@ -667,7 +752,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -690,7 +775,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -701,6 +786,75 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 2 */
   HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 0;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 31999;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
+
+}
+
+/**
+  * @brief TIM13 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM13_Init(void)
+{
+
+  /* USER CODE BEGIN TIM13_Init 0 */
+
+  /* USER CODE END TIM13_Init 0 */
+
+  /* USER CODE BEGIN TIM13_Init 1 */
+
+  /* USER CODE END TIM13_Init 1 */
+  htim13.Instance = TIM13;
+  htim13.Init.Prescaler = 495;
+  htim13.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim13.Init.Period = 64515;
+  htim13.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim13.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim13) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM13_Init 2 */
+
+  /* USER CODE END TIM13_Init 2 */
 
 }
 
@@ -720,7 +874,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(BMS_FLT_EN_GPIO_Port, BMS_FLT_EN_Pin, GPIO_PIN_RESET);
@@ -737,9 +890,6 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(ADC_RST_GPIO_Port, ADC_RST_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SPI_FERAM_WP_GPIO_Port, SPI_FERAM_WP_Pin, GPIO_PIN_RESET);
-
   /*Configure GPIO pins : BMS_FLT_EN_Pin ADC_RST_Pin */
   GPIO_InitStruct.Pin = BMS_FLT_EN_Pin|ADC_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -753,14 +903,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PRECHARGE_COMPLETE_Pin CHARGE_EN_Pin */
-  GPIO_InitStruct.Pin = PRECHARGE_COMPLETE_Pin|CHARGE_EN_Pin;
+  /*Configure GPIO pin : PRECHARGE_COMPLETE_Pin */
+  GPIO_InitStruct.Pin = PRECHARGE_COMPLETE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(PRECHARGE_COMPLETE_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DEBUG_LED_Pin SPI_UCOMM_CS_Pin SPI_FERAM_CS_Pin */
-  GPIO_InitStruct.Pin = DEBUG_LED_Pin|SPI_UCOMM_CS_Pin|SPI_FERAM_CS_Pin;
+  /*Configure GPIO pin : DEBUG_LED_Pin */
+  GPIO_InitStruct.Pin = DEBUG_LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(DEBUG_LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SPI_UCOMM_CS_Pin SPI_FERAM_CS_Pin */
+  GPIO_InitStruct.Pin = SPI_UCOMM_CS_Pin|SPI_FERAM_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -773,18 +930,98 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SPI_ADC_CS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SPI_FERAM_WP_Pin */
-  GPIO_InitStruct.Pin = SPI_FERAM_WP_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : CHARGE_EN_Pin */
+  GPIO_InitStruct.Pin = CHARGE_EN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SPI_FERAM_WP_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(CHARGE_EN_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, (CAN_RxHeaderTypeDef *) &rx_header, (uint8_t*) rx_data);
+
+	switch(rx_header.StdId){
+		case CAN_1_CPU_BMS_VIEWER_POLL_ID:
+			pollingFlag = true;
+			break;
+		case MANUAL_BALANCING_ID:
+			new_balance_msg = 1;
+			for(int i = 0; i < rx_header.DLC; i++){
+				balancing_data_array[i] = rx_data[i];
+			}
+			break;
+		default:
+			break;
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if(htim == &htim1){
+		HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
+
+		uint32_t new_t = HAL_GetTick();
+		timeBetween = new_t - prevTime;
+		if(timeBetween >= 11){
+			isoADC_period_miss++;
+			if(timeBetween > max_isoADC_period){
+				max_isoADC_period = (uint8_t) timeBetween;
+			}
+		}
+
+		prevTime = new_t;
+		isoADC_rdy_status = read_isoADC_ADCs(&gIsoADCConfig, &gIsoADCData);
+		error_cnt += (uint8_t) (gIsoADCData.ch0_drdy ? 0 : 1);
+		convert_raw_to_actual(&gIsoADCConfig, &gIsoADCData);
+		BMSCriticalInfo.isoAdcPackVoltage = (float)gIsoADCData.bus_voltage;
+		BMSCriticalInfo.packCurrent = (float)gIsoADCData.shunt_current;
+		live_pack_voltage = BMSCriticalInfo.isoAdcPackVoltage;
+		live_pack_current = BMSCriticalInfo.packCurrent;
+		transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
+		HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+
+	}
+}
+
+void send_can_msg_from_irq(){
+	can_tx_phase++;
+	switch(can_tx_phase){
+		case 1:
+			transmit_cell_vlt_msg(&BMSCriticalInfo);
+			break;
+		case 2:
+//			transmit_bms_status_msg(&BMSCriticalInfo, BMS_STATUS);
+			break;
+		case 3:
+			transmit_cell_temp_msg(&BMSCriticalInfo);
+			break;
+		case 4:
+			if ((manual_balancing_config.valid_charge_message == true) &&
+				(manual_balancing_config.charge_en == true) &&
+				(!bmsFault == true)) {
+				CHARGER_message();
+			}
+			break;
+		case 5:
+			can_tx_phase = 0;
+			break;
+	}
+}
+
+void send_cell_vals_polling(){
+	// Reread 391 to see if this is bad
+	DISABLE_ALL_CAN_IRQS
+	if (pollingFlag || CONSTANT_CAN_ENABLE){
+		transmit_cell_data_msg(bmsData);
+		pollingFlag = false;
+	}
+	charging_msg_timeout = 1;
+	ENABLE_ALL_CAN_IRQS
+}
+
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]) {
     uint32_t can_error_code = HAL_CAN_GetError(hcan);
 
@@ -796,43 +1033,6 @@ static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderType
     }
 
     return HAL_CAN_AddTxMessage(hcan, tx_header, msg_data, &tx_mailbox) == HAL_OK;
-}
-
-void setChargerTxData(BMSConfigStructTypedef cfg) {	// unused as of 10/15/24
-    charger_tx_header.StdId = CHARGER_OUT_ID;
-    charger_tx_header.DLC = 8;
-
-    /* voltage data (hex value of desired voltage (V) times 10)*/
-    charger_tx_data[0] = (uint8_t)((cfg.chargerVoltage >> 8) & 0xFF);
-    charger_tx_data[1] = (uint8_t)(cfg.chargerVoltage & 0xFF);
-
-    /* set the current data (hex value of desired current (A) times 10) */
-    switch (charge_rate) {
-        case 1:
-            /* lower current */
-            charger_tx_data[2] = (uint8_t)((cfg.lowerCurrent >> 8) & 0xFF);
-            charger_tx_data[3] = (uint8_t)(cfg.lowerCurrent & 0xFF);
-            break;
-
-        case 2:
-            /* normal current */
-            charger_tx_data[2] = (uint8_t)((cfg.normalCurrent >> 8) & 0xFF);
-            charger_tx_data[3] = (uint8_t)(cfg.normalCurrent & 0xFF);
-            break;
-
-        default:
-            /* no current */
-            charger_tx_data[2] = 0x00;
-            charger_tx_data[3] = 0x00;
-    }
-
-    /* these data bytes are not used */
-    charger_tx_data[4] = 0x00;
-    charger_tx_data[5] = 0x00;
-    charger_tx_data[6] = 0x00;
-    charger_tx_data[7] = 0x00;
-
-    transmit_can_message(&hcan1, &charger_tx_header, charger_tx_data);
 }
 
 static void transmit_cell_data_msg(CellData const bmsData[144]) {
@@ -879,9 +1079,10 @@ static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t cons
 
     uint8_t data[CAN_1_BMS_STATUS_LENGTH];
     struct can_1_bms_status status_msg = {
-        .soc_accum = 0.0F, // TODO
-        .cur_accum = 0.0F,
-        .vlt_accum = (float)bms->packVoltage / 10.0F,
+        .soc_accum = 0.0F,
+        .cur_accum = (float)bms->packCurrent,
+        .vlt_accum = (float)bms->isoAdcPackVoltage,
+		.vlt_accum_6811 = (float)bms->cellMonitorPackVoltage / 10.0F,
 
         // TODO: refactor tf out of this lol
         .bms_fault_ovp = bmsStatus[0] & 0x01,
@@ -890,7 +1091,7 @@ static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t cons
         .bms_fault_utp = bmsStatus[0] & 0x08,
 
         // TODO: do we really not read this anywhere else in code? also active high/low?
-        .precharge_cplt = HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin)
+        .precharge_cplt = !(HAL_GPIO_ReadPin(PRECHARGE_COMPLETE_GPIO_Port, PRECHARGE_COMPLETE_Pin))
     };
 
     can_1_bms_status_pack(data, &status_msg, sizeof(data));
@@ -959,7 +1160,9 @@ void CHARGER_message() {
 
 	uint8_t CHARGER_DATA[8];
 
-	if (manual_balancing_config.charge_en == true && manual_balancing_config.valid_charge_message == true) {
+	if ((manual_balancing_config.charge_en == true) &&
+		(manual_balancing_config.valid_charge_message == true) &&
+		(manual_balancing_config.precharge_cplt == true)) {
 		CHARGER_DATA[0] = (uint8_t)((manual_balancing_config.charge_voltage >> 8) & 0xFF);
 		CHARGER_DATA[1] = (uint8_t)(manual_balancing_config.charge_voltage & 0xFF);
 		CHARGER_DATA[2] = (uint8_t)((manual_balancing_config.charge_current >> 8) & 0xFF);
@@ -997,129 +1200,55 @@ void resetChargerVariables() {
 	manual_balancing_config.valid_charge_message = false;	// assume invalid message
 }
 
-void getLaptopCanMessage(){
-  HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, rx_data);
+void process_balancing_msg(){
+	manual_balancing_config.charge_en = (balancing_data_array[0] == 0xFF);
+	manual_balancing_config.charge_voltage = ((balancing_data_array[1] << 8) | (balancing_data_array[2]));
+	manual_balancing_config.charge_current = ((balancing_data_array[3] << 8) | (balancing_data_array[4]));
 
-  if (rx_header.StdId == CAN_1_CPU_BMS_VIEWER_POLL_ID) {
-	  pollingFlag = true;
-  }
+	manual_balancing_config.discharge_balance_en = (balancing_data_array[5] & 0xF0) == 0xF0;
+	manual_balancing_config.num_cells_discharged_per_secondary = (balancing_data_array[5] & 0x0F);
+	manual_balancing_config.discharge_threshold_voltage = ((balancing_data_array[6] << 8) | (balancing_data_array[7]));
 
-  switch (rx_header.StdId) {
-	  case MANUAL_BALANCING_ID: // insert laptop to charger can id here
-		  manual_balancing_config.charge_en = (rx_data[0] == 0xFF);
-		  manual_balancing_config.charge_voltage = ((rx_data[1] << 8) | (rx_data[2]));
-		  manual_balancing_config.charge_current = ((rx_data[3] << 8) | (rx_data[4]));
+	// check for validity
 
-		  manual_balancing_config.discharge_balance_en = (rx_data[5] & 0xF0) == 0xF0;
-		  manual_balancing_config.num_cells_discharged_per_secondary = (rx_data[5] & 0x0F);
-		  manual_balancing_config.discharge_threshold_voltage = ((rx_data[6] << 8) | (rx_data[7]));
+	// if both charge and balance are enabled, invalid message
+	if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.discharge_balance_en == true)) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // check for validity
+	// if charge is enabled AND if charge voltage is out of bounds [500-600][V]
+	// multiplied by 10 -> [5000 - 6000]
+	if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_voltage < 5000) || (manual_balancing_config.charge_voltage > 6000))) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if both charge and balance are enabled, invalid message
-		  if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.discharge_balance_en == true)) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if charge is enabled AND if charge current is out of bounds [0-10][A]
+	// multiplied by 10 -> [0 - 100]
+	if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.charge_current > 100)) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if charge is enabled AND if charge voltage is out of bounds [500-600][V]
-		  // multiplied by 10 -> [5000 - 6000]
-		  if ((manual_balancing_config.charge_en == true) && ((manual_balancing_config.charge_voltage < 5000) || (manual_balancing_config.charge_voltage > 6000))) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if cell discharge count is out of bounds
+	if ((manual_balancing_config.discharge_balance_en == true) && (manual_balancing_config.num_cells_discharged_per_secondary > 12)) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if charge is enabled AND if charge current is out of bounds [0-10][A]
-		  // multiplied by 10 -> [0 - 100]
-		  if ((manual_balancing_config.charge_en == true) && (manual_balancing_config.charge_current > 100)) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
+	// if discharge is enabled AND if discharge cell threshold is out of bounds [3.2-4.2][V]
+	// multiplied by 10,000 -> [32000 - 42000]
+	if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.discharge_threshold_voltage < 32000) || (manual_balancing_config.discharge_threshold_voltage > 42000))) {
+	  manual_balancing_config.valid_charge_message = false;
+	  resetChargerVariables();
+	}
 
-		  // if cell discharge count is out of bounds
-		  if ((manual_balancing_config.discharge_balance_en == true) && (manual_balancing_config.num_cells_discharged_per_secondary > 12)) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
-
-		  // if discharge is enabled AND if discharge cell threshold is out of bounds [3.2-4.2][V]
-		  // multiplied by 10,000 -> [32000 - 42000]
-		  if ((manual_balancing_config.discharge_balance_en == true) && ((manual_balancing_config.discharge_threshold_voltage < 32000) || (manual_balancing_config.discharge_threshold_voltage > 42000))) {
-			  manual_balancing_config.valid_charge_message = false;
-			  resetChargerVariables();
-			  break;
-		  }
-
-		  // if all conditions passed, charge message is true
-		  manual_balancing_config.valid_charge_message = true;
-		  charging_counter++;
-		  break;
-
-	  default:
-		  break;
-  }
+	// if all conditions passed, charge message is true
+	manual_balancing_config.valid_charge_message = true;
+	charging_msg_timeout = 0;
 
 }
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
-{
-    (void)hcan;
-}
-
-
-// This will not work if we aren't using ADC
-/*
-void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]) {
-    // canCounter3++;
-    uint16_t channel1;
-    uint16_t channel2;
-    uint16_t pack_voltage;
-
-    // +/- 20A (high res, channel 1)
-    sConfig.Channel = ADC_CHANNEL_1;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;
-    HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-
-    HAL_ADC_Start(&hadc1);
-    // HAL_ADCEx_Calibration_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    channel1 = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-
-    // +/- 500A (full range, channel 2)
-    sConfig.Channel = ADC_CHANNEL_2;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;
-    HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-
-    HAL_ADC_Start(&hadc1);
-    // HAL_ADCEx_Calibration_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    channel2 = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-
-    pack_voltage = (uint16_t)((bms.packVoltage / 10000) * 100);	// mV to V
-
-    TxHeader.StdId = PACKSTAT_ID;
-    TxHeader.DLC = 7;
-    uint8_t PACKSTAT_DATA[7];
-
-    PACKSTAT_DATA[0] = (uint8_t)((pack_voltage >> 8) & 0xFF);
-    PACKSTAT_DATA[1] = (uint8_t)(pack_voltage & 0xFF);
-    PACKSTAT_DATA[2] = (uint8_t)((channel1 >> 8) & 0xFF);
-    PACKSTAT_DATA[3] = (uint8_t)(channel1 & 0xFF);
-    PACKSTAT_DATA[4] = (uint8_t)((channel2 >> 8) & 0xFF);
-    PACKSTAT_DATA[5] = (uint8_t)(channel2 & 0xFF);
-    PACKSTAT_DATA[6] = 0x00;
-    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, PACKSTAT_DATA, &TxMailbox);
-    // returns message with cell voltage data
-}
-*/
 
 /* USER CODE END 4 */
 

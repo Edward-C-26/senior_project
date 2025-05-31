@@ -41,6 +41,40 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+#define ISOADC_TIMER_IRQ TIM1_UP_TIM10_IRQn
+#define CAN_TX_TIMER_IRQ TIM7_IRQn
+#define CAN1_RX_FIF0_IRQ CAN1_RX0_IRQn
+#define DISABLE_ALL_IRQS 						\
+	do{ 										\
+		HAL_NVIC_DisableIRQ(ISOADC_TIMER_IRQ);	\
+		HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ);  \
+		HAL_NVIC_DisableIRQ(CAN1_RX_FIF0_IRQ);  \
+	}while(0);
+
+#define ENABLE_ALL_IRQS 						\
+	do{ 										\
+		HAL_NVIC_EnableIRQ(ISOADC_TIMER_IRQ);	\
+		HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ);  \
+		HAL_NVIC_EnableIRQ(CAN1_RX_FIF0_IRQ);  \
+	}while(0);
+
+#define DISABLE_CAN_TX_TIMER_IRQ HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ)
+#define ENABLE_CAN_TX_TIMER_IRQ HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ)
+
+#define DISABLE_CAN1_RX_FIF0_IRQ HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ)
+#define ENABLE_CAN1_RX_FIF0_IRQ HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ)
+
+#define DISABLE_ALL_CAN_IRQS 						\
+		do{ 										\
+			HAL_NVIC_DisableIRQ(CAN_TX_TIMER_IRQ);  \
+			HAL_NVIC_DisableIRQ(CAN1_RX_FIF0_IRQ);  \
+		}while(0);
+
+#define ENABLE_ALL_CAN_IRQS 						\
+		do{ 										\
+			HAL_NVIC_EnableIRQ(CAN_TX_TIMER_IRQ);  	\
+			HAL_NVIC_EnableIRQ(CAN1_RX_FIF0_IRQ);  	\
+		}while(0);
 
 /* USER CODE END EC */
 
@@ -56,6 +90,16 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 extern SPI_HandleTypeDef* ltc_spi;
+extern int16_t poll_cell_temps;
+extern int16_t poll_cell_voltages;
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim7;
+extern TIM_HandleTypeDef htim13;
+extern int32_t fault_timer;
+
+void send_can_msg_from_irq();
+void send_cell_vals_polling();
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -113,8 +157,6 @@ extern SPI_HandleTypeDef* ltc_spi;
 #define SPI_FERAM_MISO_GPIO_Port GPIOC
 #define SPI_FERAM_MOSI_Pin GPIO_PIN_12
 #define SPI_FERAM_MOSI_GPIO_Port GPIOC
-#define SPI_FERAM_WP_Pin GPIO_PIN_2
-#define SPI_FERAM_WP_GPIO_Port GPIOD
 #define IMD_DIAGNOSTIC_Pin GPIO_PIN_3
 #define IMD_DIAGNOSTIC_GPIO_Port GPIOB
 
@@ -130,6 +172,8 @@ typedef struct {
 	bool discharge_balance_en;	// defaults to false
 	uint8_t num_cells_discharged_per_secondary;	// defaults to 0, must be set between 1 to 12 when discharge_balance_en == true
 	uint16_t discharge_threshold_voltage;	// defaults to 4.16V | multiplied by 10,000 | 4.16V -> 41600 in the variable
+
+	bool precharge_cplt;		// defaults to false
 
 	bool valid_charge_message;
 

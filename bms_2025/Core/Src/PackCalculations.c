@@ -57,7 +57,7 @@ void setCriticalVoltages(BMS_critical_info_t *bms,
             bms->invalid_data_cell = cell;
 		}        
     }
-	bms->packVoltage = totalVoltage;
+	bms->cellMonitorPackVoltage = totalVoltage;
 }
 
 
@@ -154,19 +154,18 @@ void thresholdBalance(BMSConfigStructTypedef *cfg, BMS_critical_info_t *bms,
 	}
 
 	uint8_t discharge_cell_modulo = 12 / num_cells_discharge_per_secondary;
-	
-	if(bms->curr_max_voltage > cell_discharge_threshold) { // if all cells are below the threshold, no need to discharge any of them
-		for(uint8_t cell = 0; cell < NUM_CELLS; cell++) {
-			cell_voltage = bmsData[cell].voltage;
-			
-			if(cell_voltage - cell_discharge_threshold <= 0 || cell_voltage == 65535) {
-				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 0;
-				continue; // no need to discharge, also skipping garbage values
-			}
 
-			if(cell % discharge_cell_modulo == balance_counter) { // We won't get to this point if the cell voltage is below the threshold
+	if (bms->curr_max_voltage > cell_discharge_threshold) { // if all cells are below the threshold, no need to discharge any of them
+		for  (uint8_t cell = 0; cell < NUM_CELLS; cell++) {
+			cell_voltage = bmsData[cell].voltage;
+
+			if ((cell_voltage <= cell_discharge_threshold) || (cell_voltage == 65535)) {
+				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 0;
+			}
+			else if (cell % discharge_cell_modulo == balance_counter) { // We won't get to this point if the cell voltage is below the threshold
 				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 1;
-			} else {
+			}
+			else {
 				cell_discharge[cell / cfg->numOfCellsPerIC][cell % cfg->numOfCellsPerIC] = 0;
 			}
 		}
