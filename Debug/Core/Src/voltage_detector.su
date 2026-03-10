@@ -1,0 +1,5 @@
+../Core/Src/voltage_detector.c:26:6:VoltageDetector_Init	16	static
+../Core/Src/voltage_detector.c:54:6:VoltageDetector_Start	16	static
+../Core/Src/voltage_detector.c:60:10:VoltageDetector_GetRawValue	16	static
+../Core/Src/voltage_detector.c:78:7:VoltageDetector_GetVoltage	16	static
+../Core/Src/voltage_detector.c:83:6:VoltageDetector_UpdateSampleCount	16	static
