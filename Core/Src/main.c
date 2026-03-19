@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SHUNT_RESISTOR  0.1f  /* 0.1 Ohm shunt resistor in series with battery */
+#define SHUNT_RESISTOR  0.001f  /* 0.001 Ohm shunt resistor in series with battery */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -71,7 +71,7 @@ static void MX_USART2_UART_Init(void);
 float CoulombCounter_CalculateCharge(float shunt_voltage, float shunt_resistance, float sample_interval)
 {
     /* Calculate current using Ohm's law: I = V/R */
-    float current = shunt_voltage / shunt_resistance;
+    float current = shunt_voltage / shunt_resistance /50;
     
     /* Calculate charge: Q = I * t (coulombs = amps * seconds) */
     float charge = current * sample_interval;
