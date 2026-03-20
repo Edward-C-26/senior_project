@@ -118,10 +118,11 @@ int16_t poll_cell_voltages = 0;
 
 bool CHARGE_EN = 0;
 
-CellData bmsData[144];
+CellData bmsData[NUM_CELLS];
+static_assert(NUM_CELLS <= 144, "NUM_CELLS must not exceed array size");
 uint8_t BMS_STATUS[6];
-bool discharge[12][12];
-bool full_discharge[12][12];
+bool discharge[NUM_BOARDS][12];
+bool full_discharge[NUM_BOARDS][12];
 
 volatile manual_balancing_t manual_balancing_config;
 volatile bool bmsFault;
@@ -165,11 +166,11 @@ static void MX_TIM7_Init(void);
 static void MX_TIM13_Init(void);
 /* USER CODE BEGIN PFP */
 static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderTypeDef *tx_header, const uint8_t msg_data[]);
-static void transmit_cell_data_msg(CellData const bmsData[144]);
+static void transmit_cell_data_msg(CellData const bmsData[NUM_CELLS]);
 static void transmit_bms_status_msg(BMS_critical_info_t const *bms, uint8_t const bmsStatus[6]);
 static void transmit_cell_vlt_msg(BMS_critical_info_t const *bms);
 static void transmit_cell_temp_msg(BMS_critical_info_t const *bms);
-// void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[144][6]); // old method 
+// void PACKSTAT_message(BMSConfigStructTypedef cfg, BMS_critical_info_t bms, uint8_t bmsData[NUM_CELLS][6]); // old method 
 // static void PACKSTAT_message(BMS_critical_info_t const *bms); // draft :D
 
 // Manual Charging/Balancing Functions
@@ -1035,7 +1036,7 @@ static bool transmit_can_message(CAN_HandleTypeDef* hcan, const CAN_TxHeaderType
     return HAL_CAN_AddTxMessage(hcan, tx_header, msg_data, &tx_mailbox) == HAL_OK;
 }
 
-static void transmit_cell_data_msg(CellData const bmsData[144]) {
+static void transmit_cell_data_msg(CellData const bmsData[NUM_CELLS]) {
     CAN_TxHeaderTypeDef header = {
         .StdId = CAN_1_BMS_CELL_DATA_ID,
         .DLC = CAN_1_BMS_CELL_DATA_LENGTH,

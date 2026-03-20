@@ -6,8 +6,9 @@
 #include "stdlib.h"
 #include "string.h"
 
-#define NUM_CELLS	144
-#define NUM_BOARDS	12
+// 12 cells per pack, 6 packs, 4 temps per board
+#define NUM_CELLS	72
+#define NUM_BOARDS	6
 #define NUM_TEMPS	4
 
 typedef struct {

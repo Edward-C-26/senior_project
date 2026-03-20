@@ -176,7 +176,7 @@ bool readCellVoltage(uint8_t address, uint16_t cellVoltage[12]) {
 //!		stored in the bmsData array, along with the cell number that is associated with the reading. 
 //! @param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! @returns true if no PEC for any register read for any board 
-bool readAllCellVoltages(CellData bmsData[144]) {
+bool readAllCellVoltages(CellData bmsData[]) {
 	// DEAR WHOEVER READS/ RUNS THIS CODE
 	// DO NOT BREAKPOINT HERE UNLESS YOU WANT TO GOOF TIMING UP
 	uint16_t boardVoltage[12];
@@ -277,7 +277,7 @@ bool readCellTemp(uint8_t address, uint16_t cellTemp[4], bool dcFault[4], bool t
 //! @brief This function reads cell temps from all of our board by calling readCellTemp for each board. NOTE : This is not proven to work properly yet.
 //! @param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! @returns true if PEC value received matches expected PEC value. Otherwise, false. -> i.e., returns false if any readCellTemp return values are false. 
-bool readAllCellTemps(CellData bmsData[144]) {
+bool readAllCellTemps(CellData bmsData[]) {
 	uint16_t boardTemp[4];
 	bool boardDCFault[4];
 	bool boardTempFault[4];
@@ -358,7 +358,7 @@ bool readConfig(uint8_t address, uint8_t cfg[8]) {
 //! @param cfg is the BMS configuration struct with constants 
 //! @param bmsData is an array of 144 cellData structs, containing index, fault, voltage and temperature
 //! @returns true is the cell is connnected properly, and false if the cell is "disconnected"
-bool checkAllCellConnections(BMSConfigStructTypedef cfg, CellData bmsData[144]) {
+bool checkAllCellConnections(BMSConfigStructTypedef cfg, CellData bmsData[]) {
 	uint16_t ADOWvoltage[cfg.numOfCellInputs];
 	uint16_t cellVoltage;
 	bool PEC_check[12];
@@ -432,7 +432,7 @@ void inline wakeup_idle() {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
-bool poll_single_secondary_voltage_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
+bool poll_single_secondary_voltage_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[]){
 	uint16_t boardVoltage[12];
 	bool PEC_check[12]	;
 	bool dataValid = true;
@@ -469,7 +469,7 @@ bool poll_single_secondary_voltage_reading(uint8_t board_num, BMSConfigStructTyp
 
 }
 
-bool poll_single_secondary_temp_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[144]){
+bool poll_single_secondary_temp_reading(uint8_t board_num, BMSConfigStructTypedef *cfg, CellData bmsData[]){
 
 	// do writeConfigAll(&BMSConfig);
 	uint16_t boardTemp[4];
